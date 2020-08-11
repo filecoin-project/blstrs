@@ -1,0 +1,12 @@
+[package]
+name = "blstrs"
+version = "0.1.0"
+authors = ["dignifiedquire <me@dignifiedquire.com>"]
+edition = "2018"
+license = "MIT/Apache-2.0"
+
+[package.metadata.docs.rs]
+rustdoc-args = [ "--html-in-header", "katex-header.html" ]
+
+[dependencies]
+blst = {  git = "https://github.com/supranational/blst" }
