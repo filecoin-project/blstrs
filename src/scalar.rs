@@ -322,6 +322,33 @@ impl Scalar {
 
         unsafe { blst_scalar_fr_check(scalar as _) }
     }
+
+    /// Multiplies `self` with `3`.
+    pub fn mul3(&self) -> Self {
+        let mut out = blst_fr::default();
+
+        unsafe { blst_fr_mul_by_3(&mut out as _, &self.0 as _) };
+
+        Scalar(out)
+    }
+
+    /// Left shift `self` by `count`.
+    pub fn shl(&self, count: usize) -> Self {
+        let mut out = blst_fr::default();
+
+        unsafe { blst_fr_lshift(&mut out as _, &self.0 as _, count) };
+
+        Scalar(out)
+    }
+
+    /// Right shift `self` by `count`.
+    pub fn shr(&self, count: usize) -> Self {
+        let mut out = blst_fr::default();
+
+        unsafe { blst_fr_rshift(&mut out as _, &self.0 as _, count) };
+
+        Scalar(out)
+    }
 }
 
 #[cfg(test)]
