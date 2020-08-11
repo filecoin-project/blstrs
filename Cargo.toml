@@ -10,3 +10,7 @@ rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
 blst = {  git = "https://github.com/supranational/blst" }
+rand_core = "0.5.1"
+
+[dev-dependencies]
+rand_xorshift = "0.2.0"

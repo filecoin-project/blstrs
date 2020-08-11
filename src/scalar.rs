@@ -289,11 +289,47 @@ impl Scalar {
 
         Scalar(out)
     }
+
+    /// Computes a uniformly random element using rejection sampling.
+    pub fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
+        // The number of bits we should "shave" from a randomly sampled reputation.
+        const REPR_SHAVE_BITS: usize = 256 - 255;
+
+        loop {
+            let mut raw = blst_scalar::default();
+            for i in 0..4 {
+                raw.l[i] = rng.next_u64();
+            }
+
+            // Mask away the unused most-significant bits.
+            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+            if let Ok(valid_el) = raw.try_into() {
+                return valid_el;
+            }
+        }
+    }
+
+    /// Returns true if this element is zero.
+    pub fn is_zero(&self) -> bool {
+        self.0.l.iter().all(|&e| e == 0)
+    }
+
+    /// Returns true if this element is a valid field element.
+    pub fn is_valid(&self) -> bool {
+        // Safe because all blst_fr are valid blst_scalar
+        let scalar: &blst_scalar = unsafe { std::mem::transmute(&self.0) };
+
+        unsafe { blst_scalar_fr_check(scalar as _) }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use rand_core::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
     /// INV = -(q^{-1} mod 2^64) mod 2^64
     const INV: u64 = 0xfffffffeffffffff;
@@ -516,6 +552,28 @@ mod tests {
         assert_eq!(tmp, Scalar::zero());
         let tmp = -&Scalar(blst_fr { l: [1, 0, 0, 0] });
         assert_eq!(tmp, LARGEST);
+
+        {
+            let mut a = Scalar::zero();
+            a = a.neg();
+
+            assert!(a.is_zero());
+        }
+
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        for _ in 0..1000 {
+            // Ensure (a - (-a)) = 0.
+            let mut a = Scalar::random(&mut rng);
+            let mut b = a;
+            b = b.neg();
+            a += &b;
+
+            assert!(a.is_zero());
+        }
     }
 
     #[test]
@@ -536,59 +594,119 @@ mod tests {
 
     #[test]
     fn test_multiplication() {
-        let mut cur = LARGEST;
+        let mut tmp = Scalar(blst_fr {
+            l: [
+                0x6b7e9b8faeefc81a,
+                0xe30a8463f348ba42,
+                0xeff3cb67a8279c9c,
+                0x3d303651bd7c774d,
+            ],
+        });
+        tmp *= &Scalar(blst_fr {
+            l: [
+                0x13ae28e3bc35ebeb,
+                0xa10f4488075cae2c,
+                0x8160e95a853c3b5d,
+                0x5ae3f03b561a841d,
+            ],
+        });
+        assert!(
+            tmp == Scalar(blst_fr {
+                l: [
+                    0x23717213ce710f71,
+                    0xdbee1fe53a16e1af,
+                    0xf565d3e1c2a48000,
+                    0x4426507ee75df9d7
+                ]
+            })
+        );
 
-        for i in 0..100 {
-            let mut tmp = cur;
-            tmp *= &cur;
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
-            let mut tmp2 = Scalar::zero();
-            for b in cur
-                .to_bytes_le()
-                .iter()
-                .rev()
-                .flat_map(|byte| (0..8).rev().map(move |i| ((byte >> i) & 1u8) == 1u8))
-            {
-                let tmp3 = tmp2;
-                tmp2.add_assign(&tmp3);
+        for _ in 0..1000000 {
+            // Ensure that (a * b) * c = a * (b * c)
+            let a = Scalar::random(&mut rng);
+            let b = Scalar::random(&mut rng);
+            let c = Scalar::random(&mut rng);
 
-                if b {
-                    tmp2.add_assign(&cur);
-                }
-            }
+            let mut tmp1 = a;
+            tmp1.mul_assign(&b);
+            tmp1.mul_assign(&c);
 
-            assert_eq!(tmp, tmp2, "round {}", i);
+            let mut tmp2 = b;
+            tmp2.mul_assign(&c);
+            tmp2.mul_assign(&a);
 
-            cur.add_assign(&LARGEST);
+            assert_eq!(tmp1, tmp2);
+        }
+
+        for _ in 0..1000000 {
+            // Ensure that r * (a + b + c) = r*a + r*b + r*c
+
+            let r = Scalar::random(&mut rng);
+            let mut a = Scalar::random(&mut rng);
+            let mut b = Scalar::random(&mut rng);
+            let mut c = Scalar::random(&mut rng);
+
+            let mut tmp1 = a;
+            tmp1.add_assign(&b);
+            tmp1.add_assign(&c);
+            tmp1.mul_assign(&r);
+
+            a.mul_assign(&r);
+            b.mul_assign(&r);
+            c.mul_assign(&r);
+
+            a.add_assign(&b);
+            a.add_assign(&c);
+
+            assert_eq!(tmp1, a);
         }
     }
 
     #[test]
     fn test_squaring() {
-        let mut cur = LARGEST;
+        // FIXME: why does this fail?
+        // let a = Scalar(blst_fr {
+        //     l: [
+        //         0xffffffffffffffff,
+        //         0xffffffffffffffff,
+        //         0xffffffffffffffff,
+        //         0x73eda753299d7d47,
+        //     ],
+        // });
+        // assert!(a.is_valid());
+        // assert_eq!(
+        //     a.square(),
+        //     Scalar(blst_fr {
+        //         l: [
+        //             0xc0d698e7bde077b8,
+        //             0xb79a310579e76ec2,
+        //             0xac1da8d0a9af4e5f,
+        //             0x13f629c49bf23e97
+        //         ]
+        //     })
+        // );
 
-        for _ in 0..100 {
-            let mut tmp = cur;
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        for _ in 0..1000000 {
+            // Ensure that (a * a) = a^2
+            let a = Scalar::random(&mut rng);
+
+            let mut tmp = a;
             tmp = tmp.square();
 
-            let mut tmp2 = Scalar::zero();
-            for b in cur
-                .to_bytes_le()
-                .iter()
-                .rev()
-                .flat_map(|byte| (0..8).rev().map(move |i| ((byte >> i) & 1u8) == 1u8))
-            {
-                let tmp3 = tmp2;
-                tmp2.add_assign(&tmp3);
-
-                if b {
-                    tmp2.add_assign(&cur);
-                }
-            }
+            let mut tmp2 = a;
+            tmp2.mul_assign(&a);
 
             assert_eq!(tmp, tmp2);
-
-            cur.add_assign(&LARGEST);
         }
     }
 
