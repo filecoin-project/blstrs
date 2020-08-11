@@ -278,7 +278,7 @@ impl Scalar {
         Scalar(out)
     }
 
-    /// Negates `self`.
+    /// Negates `self`, returning the result.
     #[inline]
     pub fn neg(&self) -> Self {
         let mut out = blst_fr::default();
@@ -323,7 +323,7 @@ impl Scalar {
         unsafe { blst_scalar_fr_check(scalar as _) }
     }
 
-    /// Multiplies `self` with `3`.
+    /// Multiplies `self` with `3`, returning the result.
     pub fn mul3(&self) -> Self {
         let mut out = blst_fr::default();
 
@@ -332,7 +332,7 @@ impl Scalar {
         Scalar(out)
     }
 
-    /// Left shift `self` by `count`.
+    /// Left shift `self` by `count`, returning the result.
     pub fn shl(&self, count: usize) -> Self {
         let mut out = blst_fr::default();
 
@@ -341,7 +341,7 @@ impl Scalar {
         Scalar(out)
     }
 
-    /// Right shift `self` by `count`.
+    /// Right shift `self` by `count`, returning the result.
     pub fn shr(&self, count: usize) -> Self {
         let mut out = blst_fr::default();
 
