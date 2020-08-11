@@ -1,12 +1,14 @@
 # blstrs
 
-> Implementation of Bls12-381 based on the [blst](https://github.com/supranational/blst) library.
+> Implementation of BLS12-381 pairing-friendly elliptic curve construction, using the [blst](https://github.com/supranational/blst) library as backend.
 
+## Supported Platforms
 
+Due to the assembly based nature of the implementation in `blst`, currently only the following architectures are supported
 
-## BLS12-381
+- `x86_64`,
+- `aarch64`.
 
-This is an implementation of the BLS12-381 pairing-friendly elliptic curve construction.
 
 ## BLS12 Parameterization
 
