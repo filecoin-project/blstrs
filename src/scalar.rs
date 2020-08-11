@@ -16,17 +16,6 @@ use blst::*;
 #[derive(Default, Clone, Copy)]
 pub struct Scalar(pub(crate) blst_fr);
 
-/// Constant representing the modulus
-/// q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
-pub const MODULUS: Scalar = Scalar(blst_fr {
-    l: [
-        0xffffffff00000001,
-        0x53bda402fffe5bfe,
-        0x3339d80809a1d805,
-        0x73eda753299d7d48,
-    ],
-});
-
 impl fmt::Debug for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
@@ -93,57 +82,6 @@ impl From<u64> for Scalar {
 
 impl Eq for Scalar {}
 
-/// INV = -(q^{-1} mod 2^64) mod 2^64
-const INV: u64 = 0xfffffffeffffffff;
-
-/// R = 2^256 mod q
-const R: Scalar = Scalar(blst_fr {
-    l: [
-        0x00000001fffffffe,
-        0x5884b7fa00034802,
-        0x998c4fefecbc4ff5,
-        0x1824b159acc5056f,
-    ],
-});
-
-/// R^2 = 2^512 mod q
-const R2: Scalar = Scalar(blst_fr {
-    l: [
-        0xc999e990f3f29c6d,
-        0x2b6cedcb87925c23,
-        0x05d314967254398f,
-        0x0748d9d99f59ff11,
-    ],
-});
-
-/// R^3 = 2^768 mod q
-const R3: Scalar = Scalar(blst_fr {
-    l: [
-        0xc62c1807439b73af,
-        0x1b3e0d188cf06990,
-        0x73d13c71c7b5f418,
-        0x6e2a5bb9c8db33e9,
-    ],
-});
-
-const S: u32 = 32;
-
-/// GENERATOR^t where t * 2^s + 1 = q
-/// with t odd. In other words, this
-/// is a 2^s root of unity.
-///
-/// `GENERATOR = 7 mod q` is a generator
-/// of the q - 1 order multiplicative
-/// subgroup.
-const ROOT_OF_UNITY: Scalar = Scalar(blst_fr {
-    l: [
-        0xb9b58d8c5f0e466a,
-        0x5b1b4c801819d7ec,
-        0x0af53ae352a31e64,
-        0x5bf3adda19e9b27b,
-    ],
-});
-
 impl<'a> Neg for &'a Scalar {
     type Output = Scalar;
 
@@ -201,14 +139,15 @@ impl Scalar {
 
     /// Returns one, the multiplicative identity.
     #[inline]
-    pub const fn one() -> Scalar {
-        R
+    pub fn one() -> Scalar {
+        Scalar(blst_fr { l: [1, 0, 0, 0] })
     }
 
     /// Doubles this field element.
     #[inline]
     pub fn double(&self) -> Scalar {
-        todo!()
+        // TODO: implement in blst?
+        self.add(self)
     }
 
     /// Attempts to convert a little-endian byte representation of
@@ -246,7 +185,7 @@ impl Scalar {
         original.l.copy_from_slice(&val);
 
         let mut raw = blst_fr::default();
-        unsafe { blst_fr_from(&mut raw as _, &original as _) }
+        unsafe { blst_fr_to(&mut raw as _, &original as _) }
 
         Scalar(raw)
     }
@@ -255,15 +194,16 @@ impl Scalar {
     /// little-endian byte order.
     pub fn to_bytes_le(&self) -> [u8; 32] {
         // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = Vec::with_capacity(32);
+        let mut out_v = vec![0u8; 32];
         // Safe because any valid blst_fr is also a valid blst_scalar.
         let scalar: blst_scalar = unsafe { std::mem::transmute(self.0) };
 
         unsafe {
             blst_lendian_from_scalar(out_v.as_mut_ptr(), &scalar);
         }
+
         let mut out = [0u8; 32];
-        out.copy_from_slice(&out_v[..32]);
+        out.copy_from_slice(&out_v);
 
         out
     }
@@ -272,14 +212,14 @@ impl Scalar {
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 32] {
         // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = Vec::with_capacity(32);
+        let mut out_v = vec![0u8; 32];
         // Safe because any valid blst_fr is also a valid blst_scalar.
         let scalar: blst_scalar = unsafe { std::mem::transmute(self.0) };
         unsafe {
             blst_bendian_from_scalar(out_v.as_mut_ptr(), &scalar);
         }
         let mut out = [0u8; 32];
-        out.copy_from_slice(&out_v[..32]);
+        out.copy_from_slice(&out_v);
 
         out
     }
@@ -355,6 +295,40 @@ impl Scalar {
 mod tests {
     use super::*;
 
+    /// INV = -(q^{-1} mod 2^64) mod 2^64
+    const INV: u64 = 0xfffffffeffffffff;
+
+    /// Constant representing the modulus
+    /// q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
+    const MODULUS: Scalar = Scalar(blst_fr {
+        l: [
+            0xffffffff00000001,
+            0x53bda402fffe5bfe,
+            0x3339d80809a1d805,
+            0x73eda753299d7d48,
+        ],
+    });
+
+    /// R = 2^256 mod q
+    const R: Scalar = Scalar(blst_fr {
+        l: [
+            0x00000001fffffffe,
+            0x5884b7fa00034802,
+            0x998c4fefecbc4ff5,
+            0x1824b159acc5056f,
+        ],
+    });
+
+    /// R^2 = 2^512 mod q
+    const R2: Scalar = Scalar(blst_fr {
+        l: [
+            0xc999e990f3f29c6d,
+            0x2b6cedcb87925c23,
+            0x05d314967254398f,
+            0x0748d9d99f59ff11,
+        ],
+    });
+
     const LARGEST: Scalar = Scalar(blst_fr {
         l: [
             0xffffffff00000000,
@@ -379,7 +353,6 @@ mod tests {
         assert_eq!(inv, INV);
     }
 
-    #[cfg(feature = "std")]
     #[test]
     fn test_debug() {
         assert_eq!(
@@ -391,7 +364,7 @@ mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000001"
         );
         assert_eq!(
-            format!("{:?}", R2),
+            format!("{:?}", R),
             "0x1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffffe"
         );
     }
@@ -425,7 +398,7 @@ mod tests {
         );
 
         assert_eq!(
-            R2.to_bytes_le(),
+            R.to_bytes_le(),
             [
                 254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236,
                 239, 79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24
@@ -467,7 +440,7 @@ mod tests {
                 239, 79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24
             ])
             .unwrap(),
-            R2
+            R
         );
 
         // -1 should work
@@ -565,7 +538,7 @@ mod tests {
     fn test_multiplication() {
         let mut cur = LARGEST;
 
-        for _ in 0..100 {
+        for i in 0..100 {
             let mut tmp = cur;
             tmp *= &cur;
 
@@ -584,7 +557,7 @@ mod tests {
                 }
             }
 
-            assert_eq!(tmp, tmp2);
+            assert_eq!(tmp, tmp2, "round {}", i);
 
             cur.add_assign(&LARGEST);
         }
@@ -648,11 +621,10 @@ mod tests {
 
         let mut r1 = R;
         let mut r2 = R;
-        let mut r3 = R;
 
         for _ in 0..100 {
             r1 = r1.invert().unwrap();
-            r2 = r3.pow(&q_minus_2);
+            r2 = r2.pow(&q_minus_2);
 
             assert_eq!(r1, r2);
             // Add R so we check something different next time around
