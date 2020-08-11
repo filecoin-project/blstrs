@@ -1,6 +1,10 @@
-# blstrs
+# `blstrs`
 
 > Implementation of BLS12-381 pairing-friendly elliptic curve construction, using the [blst](https://github.com/supranational/blst) library as backend.
+
+## Pronounciation
+
+Most important section, the name is pronounced `blasters`.
 
 ## Supported Platforms
 
