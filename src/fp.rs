@@ -206,8 +206,20 @@ impl Fp {
         out
     }
 
+    /// Exponentiates this element by a number represented with `u64` limbs,
+    /// least significant digit first.
     pub fn pow(&self, by: &[u64; 6]) -> Self {
-        todo!()
+        let mut res = Self::one();
+        for e in by.iter().rev() {
+            for i in (0..64).rev() {
+                res = res.square();
+
+                if ((*e >> i) & 1) == 1 {
+                    res *= self;
+                }
+            }
+        }
+        res
     }
 
     /// Computes the multiplicative inverse of this field

@@ -120,8 +120,7 @@ impl_binops_additive_specify_output!(G1Affine, G1Projective, G1Projective);
 impl G1Affine {
     /// Returns the additive identity.
     pub fn zero() -> Self {
-        // TODO: How does blst represent the point at inifinty?
-        todo!()
+        G1Affine(blst_p1_affine::default())
     }
 
     /// Returns a fixed generator of unknown exponent.
@@ -131,7 +130,7 @@ impl G1Affine {
 
     /// Determines if this point represents the point at infinity; the additive identity.
     pub fn is_zero(&self) -> bool {
-        todo!()
+        self == &Self::zero()
     }
 
     /// Serializes this element into compressed form.
@@ -234,7 +233,9 @@ impl G1Affine {
     /// Returns true if this point is on the curve. This should always return
     /// true unless an "unchecked" API was used.
     pub fn is_on_curve(&self) -> bool {
-        unsafe { blst_p1_affine_on_curve(&self.0) }
+        let on_curve = unsafe { blst_p1_affine_on_curve(&self.0) };
+        // FIXME: is_zero check should happen in blst
+        on_curve || self.is_zero()
     }
 
     /// Attempts to construct an affine point given an x-coordinate. The
@@ -294,8 +295,8 @@ impl Eq for G1Projective {}
 impl PartialEq for G1Projective {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        // Missing from blst
-        todo!()
+        // TODO: more efficiente method
+        G1Affine::from(self) == G1Affine::from(other)
     }
 }
 
@@ -363,17 +364,17 @@ impl_binops_multiplicative_mixed!(G1Affine, Scalar, G1Projective);
 impl G1Projective {
     /// Returns the additive identity.
     pub fn zero() -> Self {
-        todo!()
+        G1Projective(blst_p1::default())
     }
 
     /// Returns a fixed generator of unknown exponent.
     pub fn one() -> Self {
-        todo!()
+        G1Affine::one().into()
     }
 
     /// Determines if this point represents the point at infinity; the additive identity.
     pub fn is_zero(&self) -> bool {
-        todo!()
+        self == &Self::zero()
     }
 
     /// Serializes this element into compressed form.
@@ -447,7 +448,7 @@ impl G1Projective {
     pub fn add(&self, rhs: &G1Projective) -> G1Projective {
         let mut out = blst_p1::default();
 
-        unsafe { blst_p1_add(&mut out, &self.0, &rhs.0) };
+        unsafe { blst_p1_add_or_double(&mut out, &self.0, &rhs.0) };
 
         G1Projective(out)
     }
@@ -456,7 +457,7 @@ impl G1Projective {
     pub fn add_mixed(&self, rhs: &G1Affine) -> G1Projective {
         let mut out = blst_p1::default();
 
-        unsafe { blst_p1_add_affine(&mut out, &self.0, &rhs.0) };
+        unsafe { blst_p1_add_or_double_affine(&mut out, &self.0, &rhs.0) };
 
         G1Projective(out)
     }
@@ -474,7 +475,7 @@ impl G1Projective {
         const NBITS: usize = 255;
 
         // Safe, because all bslt_fr are valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(by.0) };
+        let scalar: blst_scalar = by.into();
 
         unsafe { blst_p1_mult(&mut out, &self.0, &scalar, NBITS) };
 
@@ -586,10 +587,11 @@ mod tests {
 
     #[test]
     fn test_is_on_curve() {
-        assert!(G1Affine::zero().is_on_curve());
-        assert!(G1Affine::one().is_on_curve());
         assert!(G1Projective::zero().is_on_curve());
         assert!(G1Projective::one().is_on_curve());
+
+        assert!(G1Affine::zero().is_on_curve());
+        assert!(G1Affine::one().is_on_curve());
 
         let z = Fp::from_raw_unchecked([
             0xba7afa1f9a6fe250,
