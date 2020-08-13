@@ -50,6 +50,12 @@ impl TryInto<Fp> for blst_fp {
     }
 }
 
+impl From<Fp> for blst_fp {
+    fn from(val: Fp) -> blst_fp {
+        val.0
+    }
+}
+
 impl Default for Fp {
     fn default() -> Self {
         Fp::zero()
