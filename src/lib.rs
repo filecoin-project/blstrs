@@ -5,6 +5,10 @@
 #[macro_use]
 mod macros;
 
-pub mod scalar;
+mod scalar;
+mod g1;
+mod fp;
 
 pub use scalar::Scalar;
+pub use g1::{G1Affine, G1Projective};
+pub use fp::Fp;

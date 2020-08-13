@@ -87,7 +87,13 @@ impl<'a> Neg for &'a Scalar {
 
     #[inline]
     fn neg(self) -> Scalar {
-        self.neg()
+        let mut out = blst_fr::default();
+
+        const FLAG: usize = 0x1;
+
+        unsafe { blst_fr_cneg(&mut out as _, &self.0 as _, FLAG) };
+
+        Scalar(out)
     }
 }
 
@@ -274,18 +280,6 @@ impl Scalar {
         let mut out = blst_fr::default();
 
         unsafe { blst_fr_add(&mut out as _, &self.0 as _, &rhs.0 as _) };
-
-        Scalar(out)
-    }
-
-    /// Negates `self`, returning the result.
-    #[inline]
-    pub fn neg(&self) -> Self {
-        let mut out = blst_fr::default();
-
-        let flag = 0x1;
-
-        unsafe { blst_fr_cneg(&mut out as _, &self.0 as _, flag) };
 
         Scalar(out)
     }
