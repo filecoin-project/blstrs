@@ -269,6 +269,14 @@ impl G1Affine {
     pub fn y(&self) -> Fp {
         Fp(self.0.y)
     }
+
+    pub const fn uncompressed_size() -> usize {
+        96
+    }
+
+    pub const fn compressed_size() -> usize {
+        48
+    }
 }
 
 /// This is an element of $\mathbb{G}_1$ represented in the projective coordinate space.
@@ -519,6 +527,10 @@ impl G1Projective {
     /// Returns the z coordinate.
     pub fn z(&self) -> Fp {
         Fp(self.0.z)
+    }
+
+    pub fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
+        todo!()
     }
 }
 

@@ -16,6 +16,8 @@ use blst::*;
 #[derive(Default, Clone, Copy)]
 pub struct Scalar(blst_fr);
 
+pub const S: u32 = 32;
+
 impl fmt::Debug for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
@@ -316,10 +318,14 @@ impl Scalar {
         Scalar(out)
     }
 
+    pub const fn num_bits() -> usize {
+        255
+    }
+
     /// Computes a uniformly random element using rejection sampling.
     pub fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
         // The number of bits we should "shave" from a randomly sampled reputation.
-        const REPR_SHAVE_BITS: usize = 256 - 255;
+        const REPR_SHAVE_BITS: usize = 256 - Scalar::num_bits();
 
         loop {
             let mut raw = blst_scalar::default();
@@ -374,6 +380,14 @@ impl Scalar {
         unsafe { blst_fr_rshift(&mut out as _, &self.0 as _, count) };
 
         Scalar(out)
+    }
+
+    pub fn multiplicative_generator() -> Self {
+        todo!()
+    }
+
+    pub fn root_of_unity() -> Self {
+        todo!()
     }
 }
 

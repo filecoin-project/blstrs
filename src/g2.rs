@@ -269,6 +269,21 @@ impl G2Affine {
     pub fn y(&self) -> Fp2 {
         Fp2(self.0.y)
     }
+
+    pub const fn uncompressed_size() -> usize {
+        96
+    }
+
+    pub const fn compressed_size() -> usize {
+        48
+    }
+
+    /// Prepare this element for use in a pairing.
+    pub fn prepare(&self) -> G2Prepared {
+        let mut lines = vec![blst_fp6::default(); 68];
+        unsafe { blst_precompute_lines(lines.as_mut_ptr(), &self.0) }
+        G2Prepared(lines)
+    }
 }
 
 /// This is an element of $\mathbb{G}_2$ represented in the projective coordinate space.
@@ -521,3 +536,6 @@ impl G2Projective {
         Fp2(self.0.z)
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct G2Prepared(Vec<blst_fp6>);
