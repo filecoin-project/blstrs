@@ -443,14 +443,16 @@ impl fff::PrimeField for Scalar {
     const CAPACITY: u32 = Self::NUM_BITS - 1;
     const S: u32 = S;
 
-    fn from_repr(_: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
-        todo!()
+    fn from_repr(repr: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
+        repr.0.try_into().map_err(|err: NotInFieldError| {
+            fff::PrimeFieldDecodingError::NotInField(err.to_string())
+        })
     }
 
     /// Convert a biginteger representation into a prime field element, if
     /// the number is an element of the field.
     fn into_repr(&self) -> Self::Repr {
-        todo!()
+        (*self).into()
     }
 
     fn char() -> Self::Repr {
