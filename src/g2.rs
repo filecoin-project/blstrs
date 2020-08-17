@@ -7,6 +7,7 @@ use core::{
 };
 
 use blst::*;
+use fff::PrimeField;
 use rand_core::RngCore;
 
 use crate::{Fp2, Scalar};
@@ -486,7 +487,7 @@ impl G2Projective {
         const NBITS: usize = 255;
 
         // Safe, because all bslt_fr are valid blst_scalar.
-        let scalar: blst_scalar = by.into();
+        let scalar: blst_scalar = unsafe { std::mem::transmute(by.into_repr()) };
 
         unsafe { blst_p2_mult(&mut out, &self.0, &scalar, NBITS) };
 

@@ -472,7 +472,7 @@ impl fff::PrimeField for Fp {
     }
 
     fn char() -> Self::Repr {
-        MODULUS.into()
+        MODULUS
     }
 
     fn multiplicative_generator() -> Self {
@@ -611,27 +611,6 @@ impl Fp {
         unsafe { blst_fp_eucl_inverse(&mut out, &self.0) };
 
         Some(Fp(out))
-    }
-
-    /// Computes a uniformly random element using rejection sampling.
-    pub fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        // The number of bits we should "shave" from a randomly sampled reputation.
-        const REPR_SHAVE_BITS: usize = 384 - 381;
-
-        loop {
-            let mut raw = [0u64; 6];
-            for i in 0..6 {
-                raw[i] = rng.next_u64();
-            }
-
-            // Mask away the unused most-significant bits.
-            raw[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
-
-            let fp = blst_fp { l: raw };
-            if FpRepr(fp) < MODULUS {
-                return Fp(fp);
-            }
-        }
     }
 
     /// Constructs an element of `Fp` without checking that it is canonical.
