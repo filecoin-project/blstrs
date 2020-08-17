@@ -16,9 +16,220 @@ use blst::*;
 #[derive(Default, Clone, Copy)]
 pub struct Scalar(blst_fr);
 
+/// Representation of a `Scalar`, in regular coordinates.
+#[derive(Default, Clone, Copy)]
+pub struct ScalarRepr(blst_scalar);
+
+impl AsRef<[u64]> for ScalarRepr {
+    fn as_ref(&self) -> &[u64] {
+        &self.0.l
+    }
+}
+
+impl AsMut<[u64]> for ScalarRepr {
+    fn as_mut(&mut self) -> &mut [u64] {
+        &mut self.0.l
+    }
+}
+
+const LIMBS: usize = 4;
+const LIMB_BITS: usize = 64;
+
+impl fmt::Debug for ScalarRepr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x")?;
+        for &b in self.0.l.iter().rev() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for ScalarRepr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x")?;
+        for &b in self.0.l.iter().rev() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<u32> for ScalarRepr {
+    fn from(val: u32) -> ScalarRepr {
+        let mut raw = blst_scalar::default();
+
+        unsafe { blst_scalar_from_uint32(&mut raw as *mut _, val as *const _) };
+
+        ScalarRepr(raw)
+    }
+}
+
+impl From<u64> for ScalarRepr {
+    fn from(val: u64) -> ScalarRepr {
+        let mut raw = blst_scalar::default();
+
+        unsafe { blst_scalar_from_uint64(&mut raw as *mut _, val as *const _) };
+
+        ScalarRepr(raw)
+    }
+}
+
+impl Ord for ScalarRepr {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for (a, b) in self.0.l.iter().rev().zip(other.0.l.iter().rev()) {
+            if a < b {
+                return std::cmp::Ordering::Less;
+            } else if a > b {
+                return std::cmp::Ordering::Greater;
+            }
+        }
+
+        std::cmp::Ordering::Equal
+    }
+}
+
+impl PartialOrd for ScalarRepr {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ScalarRepr {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.0.l == other.0.l
+    }
+}
+impl Eq for ScalarRepr {}
+
+impl fff::PrimeFieldRepr for ScalarRepr {
+    fn sub_noborrow(&mut self, other: &Self) {
+        let mut borrow = 0;
+
+        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+            *a = fff::sbb(*a, *b, &mut borrow);
+        }
+    }
+
+    fn add_nocarry(&mut self, other: &Self) {
+        let mut carry = 0;
+
+        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+            *a = fff::adc(*a, *b, &mut carry);
+        }
+    }
+
+    fn num_bits(&self) -> u32 {
+        let mut ret = (LIMBS as u32) * LIMB_BITS as u32;
+        for i in self.0.l.iter().rev() {
+            let leading = i.leading_zeros();
+            ret -= leading;
+            if leading != LIMB_BITS as u32 {
+                break;
+            }
+        }
+
+        ret
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.l.iter().all(|&e| e == 0)
+    }
+
+    fn is_odd(&self) -> bool {
+        self.0.l[0] & 1 == 1
+    }
+
+    fn is_even(&self) -> bool {
+        !self.is_odd()
+    }
+
+    fn div2(&mut self) {
+        let mut t = 0;
+        for i in self.0.l.iter_mut().rev() {
+            let t2 = *i << 63;
+            *i >>= 1;
+            *i |= t;
+            t = t2;
+        }
+    }
+
+    fn shr(&mut self, mut n: u32) {
+        if n as usize >= LIMB_BITS * LIMBS {
+            *self = Self::from(0u32);
+            return;
+        }
+
+        while n >= LIMB_BITS as u32 {
+            let mut t = 0;
+            for i in self.0.l.iter_mut().rev() {
+                std::mem::swap(&mut t, i);
+            }
+            n -= LIMB_BITS as u32;
+        }
+
+        if n > 0 {
+            let mut t = 0;
+            for i in self.0.l.iter_mut().rev() {
+                let t2 = *i << (LIMB_BITS as u32 - n);
+                *i >>= n;
+                *i |= t;
+                t = t2;
+            }
+        }
+    }
+
+    fn mul2(&mut self) {
+        let mut last = 0;
+        for i in &mut self.0.l {
+            let tmp = *i >> 63;
+            *i <<= 1;
+            *i |= last;
+            last = tmp;
+        }
+    }
+
+    fn shl(&mut self, mut n: u32) {
+        if n as usize >= LIMB_BITS * LIMBS {
+            *self = Self::from(0u32);
+            return;
+        }
+
+        while n >= LIMB_BITS as u32 {
+            let mut t = 0;
+            for i in &mut self.0.l {
+                std::mem::swap(&mut t, i);
+            }
+            n -= LIMB_BITS as u32;
+        }
+
+        if n > 0 {
+            let mut t = 0;
+            for i in &mut self.0.l {
+                let t2 = *i >> (LIMB_BITS as u32 - n);
+                *i <<= n;
+                *i |= t;
+                t = t2;
+            }
+        }
+    }
+}
+
 pub const S: u32 = 32;
 
 impl fmt::Debug for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let tmp = self.to_bytes_le();
+        write!(f, "0x")?;
+        for &b in tmp.iter().rev() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
         write!(f, "0x")?;
@@ -35,6 +246,7 @@ impl PartialEq for Scalar {
         self.0.l == other.0.l
     }
 }
+impl Eq for Scalar {}
 
 #[derive(Debug, Clone)]
 pub struct NotInFieldError;
@@ -74,6 +286,13 @@ impl Into<blst_scalar> for &Scalar {
     }
 }
 
+impl From<Scalar> for ScalarRepr {
+    fn from(val: Scalar) -> Self {
+        let raw: blst_scalar = (&val).into();
+        ScalarRepr(raw)
+    }
+}
+
 impl From<u32> for Scalar {
     fn from(val: u32) -> Scalar {
         let mut raw = blst_scalar::default();
@@ -93,8 +312,6 @@ impl From<u64> for Scalar {
         raw.try_into().expect("u64 is always inside the field")
     }
 }
-
-impl Eq for Scalar {}
 
 impl<'a> Neg for &'a Scalar {
     type Output = Scalar;
@@ -150,26 +367,123 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a Scalar {
 impl_binops_additive!(Scalar, Scalar);
 impl_binops_multiplicative!(Scalar, Scalar);
 
-impl Scalar {
-    /// Returns zero, the additive identity.
-    #[inline]
-    pub fn zero() -> Scalar {
+impl fff::Field for Scalar {
+    fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
+        use fff::PrimeField;
+
+        // The number of bits we should "shave" from a randomly sampled reputation.
+        const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
+
+        loop {
+            let mut raw = blst_scalar::default();
+            for i in 0..4 {
+                raw.l[i] = rng.next_u64();
+            }
+
+            // Mask away the unused most-significant bits.
+            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+            if let Ok(valid_el) = raw.try_into() {
+                return valid_el;
+            }
+        }
+    }
+
+    fn zero() -> Self {
         Scalar::from_raw_unchecked([0, 0, 0, 0])
     }
 
-    /// Returns one, the multiplicative identity.
-    #[inline]
-    pub fn one() -> Scalar {
+    fn one() -> Self {
         Scalar::from_raw_unchecked([1, 0, 0, 0])
     }
 
-    /// Doubles this field element.
-    #[inline]
-    pub fn double(&self) -> Scalar {
-        // TODO: implement in blst?
-        self.add(self)
+    fn is_zero(&self) -> bool {
+        self == &Self::zero()
     }
 
+    fn square(&mut self) {
+        let mut raw = blst_fr::default();
+        unsafe { blst_fr_sqr(&mut raw as _, &self.0 as _) }
+
+        self.0 = raw;
+    }
+
+    fn double(&mut self) {
+        *self += *self;
+    }
+
+    fn negate(&mut self) {
+        *self = -&*self;
+    }
+    fn add_assign(&mut self, other: &Self) {
+        *self += other;
+    }
+
+    fn sub_assign(&mut self, other: &Self) {
+        *self -= other;
+    }
+
+    fn mul_assign(&mut self, other: &Self) {
+        *self *= other;
+    }
+
+    fn inverse(&self) -> Option<Self> {
+        todo!()
+    }
+
+    fn frobenius_map(&mut self, power: usize) {
+        todo!()
+    }
+}
+
+impl fff::PrimeField for Scalar {
+    type Repr = ScalarRepr;
+
+    const NUM_BITS: u32 = 256;
+    const CAPACITY: u32 = Self::NUM_BITS - 1;
+    const S: u32 = S;
+
+    fn from_repr(_: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
+        todo!()
+    }
+
+    /// Convert a biginteger representation into a prime field element, if
+    /// the number is an element of the field.
+    fn into_repr(&self) -> Self::Repr {
+        todo!()
+    }
+
+    fn char() -> Self::Repr {
+        ScalarRepr(blst_scalar {
+            l: [
+                0xffffffff00000001,
+                0x53bda402fffe5bfe,
+                0x3339d80809a1d805,
+                0x73eda753299d7d48,
+            ],
+        })
+    }
+
+    fn multiplicative_generator() -> Self {
+        todo!()
+    }
+
+    fn root_of_unity() -> Self {
+        todo!()
+    }
+}
+
+impl fff::SqrtField for Scalar {
+    fn legendre(&self) -> fff::LegendreSymbol {
+        todo!()
+    }
+
+    fn sqrt(&self) -> Option<Self> {
+        todo!()
+    }
+}
+
+impl Scalar {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes_le(bytes: &[u8; 32]) -> Option<Scalar> {
@@ -254,25 +568,6 @@ impl Scalar {
         out
     }
 
-    /// Squares this element.
-    #[inline]
-    pub fn square(&self) -> Scalar {
-        let mut raw = blst_fr::default();
-        unsafe { blst_fr_sqr(&mut raw as _, &self.0 as _) }
-
-        Scalar(raw)
-    }
-
-    /// Computes the square root of this element, if it exists.
-    pub fn sqrt(&self) -> Option<Self> {
-        todo!()
-    }
-
-    /// Computes the multiplicative inverse of this element, failing if the element is zero.
-    pub fn invert(&self) -> Option<Self> {
-        todo!()
-    }
-
     /// Multiplies `rhs` by `self`, returning the result.
     #[inline]
     pub fn mul(&self, rhs: &Self) -> Self {
@@ -281,21 +576,6 @@ impl Scalar {
         unsafe { blst_fr_mul(&mut out as _, &self.0 as _, &rhs.0 as _) };
 
         Scalar(out)
-    }
-
-    /// Exponentiates `self` by `by`, where `by` is a little-endian order integer exponent.
-    pub fn pow(&self, by: &[u64; 4]) -> Self {
-        let mut res = Self::one();
-        for e in by.iter().rev() {
-            for i in (0..64).rev() {
-                res = res.square();
-
-                if ((*e >> i) & 1) == 1 {
-                    res *= self;
-                }
-            }
-        }
-        res
     }
 
     /// Subtracts `rhs` from `self`, returning the result.
@@ -316,30 +596,6 @@ impl Scalar {
         unsafe { blst_fr_add(&mut out as _, &self.0 as _, &rhs.0 as _) };
 
         Scalar(out)
-    }
-
-    pub const fn num_bits() -> usize {
-        255
-    }
-
-    /// Computes a uniformly random element using rejection sampling.
-    pub fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        // The number of bits we should "shave" from a randomly sampled reputation.
-        const REPR_SHAVE_BITS: usize = 256 - Scalar::num_bits();
-
-        loop {
-            let mut raw = blst_scalar::default();
-            for i in 0..4 {
-                raw.l[i] = rng.next_u64();
-            }
-
-            // Mask away the unused most-significant bits.
-            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
-
-            if let Ok(valid_el) = raw.try_into() {
-                return valid_el;
-            }
-        }
     }
 
     /// Returns true if this element is zero.
@@ -381,20 +637,13 @@ impl Scalar {
 
         Scalar(out)
     }
-
-    pub fn multiplicative_generator() -> Self {
-        todo!()
-    }
-
-    pub fn root_of_unity() -> Self {
-        todo!()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use fff::{Field, SqrtField};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
@@ -692,12 +941,12 @@ mod tests {
             let c = Scalar::random(&mut rng);
 
             let mut tmp1 = a;
-            tmp1.mul_assign(&b);
-            tmp1.mul_assign(&c);
+            tmp1 *= &b;
+            tmp1 *= &c;
 
             let mut tmp2 = b;
-            tmp2.mul_assign(&c);
-            tmp2.mul_assign(&a);
+            tmp2 *= &c;
+            tmp2 *= &a;
 
             assert_eq!(tmp1, tmp2);
         }
@@ -711,16 +960,16 @@ mod tests {
             let mut c = Scalar::random(&mut rng);
 
             let mut tmp1 = a;
-            tmp1.add_assign(&b);
-            tmp1.add_assign(&c);
-            tmp1.mul_assign(&r);
+            tmp1 += &b;
+            tmp1 += &c;
+            tmp1 *= &r;
 
-            a.mul_assign(&r);
-            b.mul_assign(&r);
-            c.mul_assign(&r);
+            a *= &r;
+            b *= &r;
+            c *= &r;
 
-            a.add_assign(&b);
-            a.add_assign(&c);
+            a += &b;
+            a += &c;
 
             assert_eq!(tmp1, a);
         }
@@ -758,10 +1007,10 @@ mod tests {
             let a = Scalar::random(&mut rng);
 
             let mut tmp = a;
-            tmp = tmp.square();
+            tmp.square();
 
             let mut tmp2 = a;
-            tmp2.mul_assign(&a);
+            tmp2 *= &a;
 
             assert_eq!(tmp, tmp2);
         }
@@ -769,24 +1018,24 @@ mod tests {
 
     #[test]
     fn test_inversion() {
-        assert!(Scalar::zero().invert().is_none());
-        assert_eq!(Scalar::one().invert().unwrap(), Scalar::one());
-        assert_eq!((-&Scalar::one()).invert().unwrap(), -&Scalar::one());
+        assert!(Scalar::zero().inverse().is_none());
+        assert_eq!(Scalar::one().inverse().unwrap(), Scalar::one());
+        assert_eq!((-&Scalar::one()).inverse().unwrap(), -&Scalar::one());
 
         let mut tmp = R2();
 
         for _ in 0..100 {
-            let mut tmp2 = tmp.invert().unwrap();
-            tmp2.mul_assign(&tmp);
+            let mut tmp2 = tmp.inverse().unwrap();
+            tmp2 *= &tmp;
 
             assert_eq!(tmp2, Scalar::one());
 
-            tmp.add_assign(&R2());
+            tmp += &R2();
         }
     }
 
     #[test]
-    fn test_invert_is_pow() {
+    fn test_inverse_is_pow() {
         let q_minus_2 = [
             0xfffffffeffffffff,
             0x53bda402fffe5bfe,
@@ -798,12 +1047,12 @@ mod tests {
         let mut r2 = R();
 
         for _ in 0..100 {
-            r1 = r1.invert().unwrap();
+            r1 = r1.inverse().unwrap();
             r2 = r2.pow(&q_minus_2);
 
             assert_eq!(r1, r2);
             // Add R so we check something different next time around
-            r1.add_assign(&R());
+            r1 += &R();
             r2 = r1;
         }
     }
@@ -855,13 +1104,15 @@ mod tests {
 
     #[test]
     fn test_double() {
-        let a = Scalar::from_raw([
+        let mut a = Scalar::from_raw([
             0x1fff3231233ffffd,
             0x4884b7fa00034802,
             0x998c4fefecbc4ff3,
             0x1824b159acc50562,
         ]);
 
-        assert_eq!(a.double(), a + a);
+        let mut b = a.clone();
+        b.double();
+        assert_eq!(b, a + a);
     }
 }

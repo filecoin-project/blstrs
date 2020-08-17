@@ -22,3 +22,11 @@ pub use g1::{G1Affine, G1Projective};
 pub use g2::{G2Affine, G2Prepared, G2Projective};
 pub use pairing::*;
 pub use scalar::{Scalar, S as SCALAR_S};
+
+/// Bls12-381 engine
+#[derive(Debug, Copy, Clone)]
+pub struct Bls12;
+
+impl fff::ScalarEngine for Bls12 {
+    type Fr = Scalar;
+}
