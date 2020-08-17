@@ -38,7 +38,7 @@ impl fmt::Debug for FpRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x")?;
         for &b in self.0.l.iter().rev() {
-            write!(f, "{:02x}", b)?;
+            write!(f, "{:016x}", b)?;
         }
         Ok(())
     }
@@ -48,7 +48,7 @@ impl fmt::Display for FpRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x")?;
         for &b in self.0.l.iter().rev() {
-            write!(f, "{:02x}", b)?;
+            write!(f, "{:016x}", b)?;
         }
         Ok(())
     }
@@ -56,11 +56,17 @@ impl fmt::Display for FpRepr {
 
 impl From<u64> for FpRepr {
     fn from(val: u64) -> FpRepr {
-        let mut raw = blst_fp::default();
+        FpRepr(blst_fp {
+            l: [val, 0, 0, 0, 0, 0],
+        })
+    }
+}
 
-        unsafe { blst_fp_from_uint64(&mut raw, &val) };
-
-        FpRepr(raw)
+impl From<u64> for Fp {
+    fn from(val: u64) -> Fp {
+        let mut out = blst_fp::default();
+        unsafe { blst_fp_from_uint64(&mut out, &val) };
+        Fp(out)
     }
 }
 
@@ -224,7 +230,7 @@ impl fmt::Debug for Fp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
         write!(f, "0x")?;
-        for &b in tmp.iter() {
+        for &b in tmp.iter().rev() {
             write!(f, "{:02x}", b)?;
         }
         Ok(())
@@ -234,57 +240,32 @@ impl fmt::Debug for Fp {
 impl fmt::Display for Fp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
-        write!(f, "0x")?;
-        for &b in tmp.iter() {
+        write!(f, "Fp(0x")?;
+        for &b in tmp.iter().rev() {
             write!(f, "{:02x}", b)?;
         }
+        write!(f, ")")?;
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NotInFieldError;
-
-impl fmt::Display for NotInFieldError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Not in field")
-    }
-}
-
-impl std::error::Error for NotInFieldError {}
-
-impl TryInto<Fp> for blst_fp {
-    type Error = NotInFieldError;
-
-    fn try_into(self) -> Result<Fp, Self::Error> {
-        let fp = Fp(self);
-
-        if !fp.is_valid() {
-            return Err(NotInFieldError);
-        }
-
-        Ok(fp)
     }
 }
 
 impl From<Fp> for FpRepr {
     fn from(val: Fp) -> Self {
-        let raw: blst_fp = val.into();
-        FpRepr(raw)
-    }
-}
-
-impl From<FpRepr> for Fp {
-    fn from(val: FpRepr) -> Self {
-        let mut raw = blst_fp::default();
-        unsafe { blst_fp_from(&mut raw, &val.0) };
-        Fp(raw)
+        let mut out = blst_fp::default();
+        unsafe { blst_fp_from(&mut out, &val.0) };
+        FpRepr(out)
     }
 }
 
 impl From<Fp> for blst_fp {
     fn from(val: Fp) -> blst_fp {
         val.0
+    }
+}
+
+impl From<blst_fp> for Fp {
+    fn from(val: blst_fp) -> Fp {
+        Fp(val)
     }
 }
 
@@ -422,31 +403,45 @@ impl fff::Field for Fp {
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self *= other;
+        *self = self.mul(other)
     }
 
     fn inverse(&self) -> Option<Self> {
-        todo!()
+        // Exponentiate by p - 2
+        let t = self.pow(&[
+            0xb9feffffffffaaa9,
+            0x1eabfffeb153ffff,
+            0x6730d2a0f6b0f624,
+            0x64774b84f38512bf,
+            0x4b1ba7b6434bacd7,
+            0x1a0111ea397fe69a,
+        ]);
+
+        if t.is_zero() {
+            None
+        } else {
+            Some(t)
+        }
     }
 
-    fn frobenius_map(&mut self, power: usize) {
-        todo!()
+    fn frobenius_map(&mut self, _: usize) {
+        // This has no effect in a prime field.
     }
 }
 
 const MODULUS: FpRepr = FpRepr(blst_fp {
     l: [
-        13402431016077863595,
-        2210141511517208575,
-        7435674573564081700,
-        7239337960414712511,
-        5412103778470702295,
-        1873798617647539866,
+        0xb9feffffffffaaab,
+        0x1eabfffeb153ffff,
+        0x6730d2a0f6b0f624,
+        0x64774b84f38512bf,
+        0x4b1ba7b6434bacd7,
+        0x1a0111ea397fe69a,
     ],
 });
 
 impl FpRepr {
-    pub const fn new(raw: [u64; 6]) -> Self {
+    pub fn new(raw: [u64; 6]) -> Self {
         FpRepr(blst_fp { l: raw })
     }
 }
@@ -459,9 +454,15 @@ impl fff::PrimeField for Fp {
     const S: u32 = 1;
 
     fn from_repr(repr: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
-        repr.0.try_into().map_err(|err: NotInFieldError| {
-            fff::PrimeFieldDecodingError::NotInField(err.to_string())
-        })
+        if FpRepr(repr.0) < MODULUS {
+            let mut out = blst_fp::default();
+            unsafe { blst_fp_to(&mut out, &repr.0) }
+            Ok(Fp(out))
+        } else {
+            Err(fff::PrimeFieldDecodingError::NotInField(
+                "not in field".to_string(),
+            ))
+        }
     }
 
     /// Convert a biginteger representation into a prime field element, if
@@ -475,14 +476,14 @@ impl fff::PrimeField for Fp {
     }
 
     fn multiplicative_generator() -> Self {
-        FpRepr(blst_fp {
+        Fp::from_repr(FpRepr(blst_fp {
             l: [2, 0, 0, 0, 0, 0],
-        })
-        .into()
+        }))
+        .unwrap()
     }
 
     fn root_of_unity() -> Self {
-        FpRepr(blst_fp {
+        Fp::from_repr(FpRepr(blst_fp {
             l: [
                 13402431016077863594,
                 2210141511517208575,
@@ -491,8 +492,8 @@ impl fff::PrimeField for Fp {
                 5412103778470702295,
                 1873798617647539866,
             ],
-        })
-        .into()
+        }))
+        .unwrap()
     }
 }
 
@@ -502,26 +503,36 @@ impl fff::SqrtField for Fp {
     }
 
     fn sqrt(&self) -> Option<Self> {
-        // We use Shank's method, as p = 3 (mod 4). This means
-        // we only need to exponentiate by (p+1)/4. This only
-        // works for elements that are actually quadratic residue,
-        // so we check that we got the correct result at the end.
+        // Shank's algorithm for q mod 4 = 3
+        // https://eprint.iacr.org/2012/685.pdf (page 9, algorithm 2)
 
-        let sqrt = self.pow(&[
-            0xee7fbfffffffeaab,
-            0x7aaffffac54ffff,
-            0xd9cc34a83dac3d89,
-            0xd91dd2e13ce144af,
-            0x92c6e9ed90d2eb35,
-            0x680447a8e5ff9a6,
+        let mut a1 = self.pow(&[
+            17185665809301629610u64,
+            552535377879302143u64,
+            15693976698673184137u64,
+            15644892545385841839u64,
+            10576397981472451381u64,
+            468449654411884966u64,
         ]);
 
-        let mut k = sqrt.clone();
-        k.square();
-        if sqrt == k {
-            Some(sqrt)
-        } else {
+        let mut a0 = a1;
+        a0.square();
+        a0 *= self;
+
+        const RNEG: [u64; 6] = [
+            4897101644811774638u64,
+            3654671041462534141u64,
+            569769440802610537u64,
+            17053147383018470266u64,
+            17227549637287919721u64,
+            291242102765847046u64,
+        ];
+
+        if a0.0.l == RNEG {
             None
+        } else {
+            a1 *= self;
+            Some(a1)
         }
     }
 }
@@ -608,16 +619,17 @@ impl Fp {
         const REPR_SHAVE_BITS: usize = 384 - 381;
 
         loop {
-            let mut raw = Fp::default();
+            let mut raw = [0u64; 6];
             for i in 0..6 {
-                raw.0.l[i] = rng.next_u64();
+                raw[i] = rng.next_u64();
             }
 
             // Mask away the unused most-significant bits.
-            raw.0.l[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+            raw[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
-            if raw.is_valid() {
-                return raw;
+            let fp = blst_fp { l: raw };
+            if FpRepr(fp) < MODULUS {
+                return Fp(fp);
             }
         }
     }
@@ -627,10 +639,6 @@ impl Fp {
         let mut inner = blst_fp::default();
         inner.l.copy_from_slice(&v);
         Fp(inner)
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.into_repr() < MODULUS
     }
 
     #[inline]
@@ -701,37 +709,36 @@ impl Fp {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fp, FpRepr, MODULUS};
+    use super::{Fp, FpRepr};
 
     use fff::{Field, PrimeField, PrimeFieldRepr};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
-    // -((2**384) mod q) mod q
-    const NEGATIVE_ONE: FpRepr = FpRepr::new([
-        0x43f5fffffffcaaae,
-        0x32b7fff2ed47fffd,
-        0x7e83a49a2e99d69,
-        0xeca8f3318332bb7a,
-        0xef148d1ea0f4c069,
-        0x40ab3263eff0206,
-    ]);
-
-    const F_2_256: FpRepr = FpRepr::new([
-        0x75b3cd7c5ce820fu64,
-        0x3ec6ba621c3edb0bu64,
-        0x168a13d82bff6bceu64,
-        0x87663c4bf8c449d2u64,
-        0x15f34c83ddc8d830u64,
-        0xf9628b49caa2e85u64,
-    ]);
+    #[test]
+    fn test_modulus() {
+        assert_eq!(
+            format!("{:?}", Fp::char()), "0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab"
+            );
+    }
 
     #[test]
     fn test_neg_one() {
         let mut o = Fp::one();
         o.negate();
 
-        assert_eq!(Fp::from(NEGATIVE_ONE), o);
+        assert_eq!(
+            Fp(FpRepr::new([
+                0x43f5fffffffcaaae,
+                0x32b7fff2ed47fffd,
+                0x7e83a49a2e99d69,
+                0xeca8f3318332bb7a,
+                0xef148d1ea0f4c069,
+                0x40ab3263eff0206,
+            ])
+            .0),
+            o
+        );
     }
 
     #[test]
@@ -1142,142 +1149,114 @@ mod tests {
     }
 
     #[test]
-    fn test_fp_is_valid() {
-        let a = Fp::from(MODULUS);
-        assert!(!a.is_valid());
-        a.into_repr().sub_noborrow(&FpRepr::from(1));
-        assert!(a.is_valid());
-        assert!(Fp::from(FpRepr::from(0)).is_valid());
-        assert!(Fp::from(FpRepr::new([
-            0xdf4671abd14dab3e,
-            0xe2dc0c9f534fbd33,
-            0x31ca6c880cc444a6,
-            0x257a67e70ef33359,
-            0xf9b29e493f899b36,
-            0x17c8be1800b9f059
-        ]))
-        .is_valid());
-        assert!(!Fp::from(FpRepr::new([
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff
-        ]))
-        .is_valid());
-
-        let mut rng = XorShiftRng::from_seed([
-            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
-            0xbc, 0xe5,
-        ]);
-
-        for _ in 0..1000 {
-            let a = Fp::random(&mut rng);
-            assert!(a.is_valid());
-        }
-    }
-
-    #[test]
     fn test_fp_add_assign() {
         {
             // Random number
-            let mut tmp = Fp::from(FpRepr::new([
+            let mut tmp = Fp(FpRepr::new([
                 0x624434821df92b69,
                 0x503260c04fd2e2ea,
                 0xd9df726e0d16e8ce,
                 0xfbcb39adfd5dfaeb,
                 0x86b8a22b0c88b112,
                 0x165a2ed809e4201b,
-            ]));
-            assert!(tmp.is_valid());
+            ])
+            .0);
+            assert!(!tmp.is_zero());
             // Test that adding zero has no effect.
-            tmp.add_assign(&Fp::from(FpRepr::from(0)));
+            tmp.add_assign(&Fp(FpRepr::from(0).0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0x624434821df92b69,
                     0x503260c04fd2e2ea,
                     0xd9df726e0d16e8ce,
                     0xfbcb39adfd5dfaeb,
                     0x86b8a22b0c88b112,
                     0x165a2ed809e4201b
-                ]))
+                ])
+                .0)
             );
             // Add one and test for the result.
-            tmp.add_assign(&Fp::from(FpRepr::from(1)));
+            tmp.add_assign(&Fp(FpRepr::from(1).0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0x624434821df92b6a,
                     0x503260c04fd2e2ea,
                     0xd9df726e0d16e8ce,
                     0xfbcb39adfd5dfaeb,
                     0x86b8a22b0c88b112,
                     0x165a2ed809e4201b
-                ]))
+                ])
+                .0)
             );
             // Add another random number that exercises the reduction.
-            tmp.add_assign(&Fp::from(FpRepr::new([
+            tmp.add_assign(&Fp(FpRepr::new([
                 0x374d8f8ea7a648d8,
                 0xe318bb0ebb8bfa9b,
                 0x613d996f0a95b400,
                 0x9fac233cb7e4fef1,
                 0x67e47552d253c52,
                 0x5c31b227edf25da,
-            ])));
+            ])
+            .0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0xdf92c410c59fc997,
                     0x149f1bd05a0add85,
                     0xd3ec393c20fba6ab,
                     0x37001165c1bde71d,
                     0x421b41c9f662408e,
                     0x21c38104f435f5b
-                ]))
+                ])
+                .0)
             );
             // Add one to (q - 1) and test for the result.
-            tmp = Fp::from(FpRepr::new([
+            tmp = Fp(FpRepr::new([
                 0xb9feffffffffaaaa,
                 0x1eabfffeb153ffff,
                 0x6730d2a0f6b0f624,
                 0x64774b84f38512bf,
                 0x4b1ba7b6434bacd7,
                 0x1a0111ea397fe69a,
-            ]));
-            tmp.add_assign(&Fp::from(FpRepr::from(1)));
+            ])
+            .0);
+            tmp.add_assign(&Fp(FpRepr::from(1).0));
             assert!(tmp.into_repr().is_zero());
             // Add a random number to another one such that the result is q - 1
-            tmp = Fp::from(FpRepr::new([
+            tmp = Fp(FpRepr::new([
                 0x531221a410efc95b,
                 0x72819306027e9717,
                 0x5ecefb937068b746,
                 0x97de59cd6feaefd7,
                 0xdc35c51158644588,
                 0xb2d176c04f2100,
-            ]));
-            tmp.add_assign(&Fp::from(FpRepr::new([
+            ])
+            .0);
+            tmp.add_assign(&Fp(FpRepr::new([
                 0x66ecde5bef0fe14f,
                 0xac2a6cf8aed568e8,
                 0x861d70d86483edd,
                 0xcc98f1b7839a22e8,
                 0x6ee5e2a4eae7674e,
                 0x194e40737930c599,
-            ])));
+            ])
+            .0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0xb9feffffffffaaaa,
                     0x1eabfffeb153ffff,
                     0x6730d2a0f6b0f624,
                     0x64774b84f38512bf,
                     0x4b1ba7b6434bacd7,
                     0x1a0111ea397fe69a
-                ]))
+                ])
+                .0)
             );
             // Add one to the result and test for it.
-            tmp.add_assign(&Fp::from(FpRepr::from(1)));
+            tmp.add_assign(&Fp(FpRepr::from(1).0));
             assert!(tmp.into_repr().is_zero());
         }
 
@@ -1302,8 +1281,8 @@ mod tests {
             tmp2.add_assign(&c);
             tmp2.add_assign(&a);
 
-            assert!(tmp1.is_valid());
-            assert!(tmp2.is_valid());
+            // assert!(tmp1.is_valid());
+            // assert!(tmp2.is_valid());
             assert_eq!(tmp1, tmp2);
         }
     }
@@ -1312,87 +1291,95 @@ mod tests {
     fn test_fp_sub_assign() {
         {
             // Test arbitrary subtraction that tests reduction.
-            let mut tmp = Fp::from(FpRepr::new([
+            let mut tmp = Fp(FpRepr::new([
                 0x531221a410efc95b,
                 0x72819306027e9717,
                 0x5ecefb937068b746,
                 0x97de59cd6feaefd7,
                 0xdc35c51158644588,
                 0xb2d176c04f2100,
-            ]));
-            tmp.sub_assign(&Fp::from(FpRepr::new([
+            ])
+            .0);
+            tmp.sub_assign(&Fp(FpRepr::new([
                 0x98910d20877e4ada,
                 0x940c983013f4b8ba,
                 0xf677dc9b8345ba33,
                 0xbef2ce6b7f577eba,
                 0xe1ae288ac3222c44,
                 0x5968bb602790806,
-            ])));
+            ])
+            .0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0x748014838971292c,
                     0xfd20fad49fddde5c,
                     0xcf87f198e3d3f336,
                     0x3d62d6e6e41883db,
                     0x45a3443cd88dc61b,
                     0x151d57aaf755ff94
-                ]))
+                ])
+                .0)
             );
 
             // Test the opposite subtraction which doesn't test reduction.
-            tmp = Fp::from(FpRepr::new([
+            tmp = Fp(FpRepr::new([
                 0x98910d20877e4ada,
                 0x940c983013f4b8ba,
                 0xf677dc9b8345ba33,
                 0xbef2ce6b7f577eba,
                 0xe1ae288ac3222c44,
                 0x5968bb602790806,
-            ]));
-            tmp.sub_assign(&Fp::from(FpRepr::new([
+            ])
+            .0);
+            tmp.sub_assign(&Fp(FpRepr::new([
                 0x531221a410efc95b,
                 0x72819306027e9717,
                 0x5ecefb937068b746,
                 0x97de59cd6feaefd7,
                 0xdc35c51158644588,
                 0xb2d176c04f2100,
-            ])));
+            ])
+            .0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0x457eeb7c768e817f,
                     0x218b052a117621a3,
                     0x97a8e10812dd02ed,
                     0x2714749e0f6c8ee3,
                     0x57863796abde6bc,
                     0x4e3ba3f4229e706
-                ]))
+                ])
+                .0)
             );
 
             // Test for sensible results with zero
-            tmp = Fp::from(FpRepr::from(0));
-            tmp.sub_assign(&Fp::from(FpRepr::from(0)));
+            tmp = Fp(FpRepr::from(0).0);
+            tmp.sub_assign(&Fp(FpRepr::from(0).0));
             assert!(tmp.is_zero());
 
-            tmp = Fp::from(FpRepr::new([
+            tmp = Fp(FpRepr::new([
                 0x98910d20877e4ada,
                 0x940c983013f4b8ba,
                 0xf677dc9b8345ba33,
                 0xbef2ce6b7f577eba,
                 0xe1ae288ac3222c44,
                 0x5968bb602790806,
-            ]));
-            tmp.sub_assign(&Fp::from(FpRepr::from(0)));
+            ])
+            .0);
+            tmp.sub_assign(&Fp(FpRepr::from(0).0));
             assert_eq!(
                 tmp,
-                Fp::from(FpRepr::new([
+                Fp(FpRepr::new([
                     0x98910d20877e4ada,
                     0x940c983013f4b8ba,
                     0xf677dc9b8345ba33,
                     0xbef2ce6b7f577eba,
                     0xe1ae288ac3222c44,
                     0x5968bb602790806
-                ]))
+                ])
+                .0)
             );
         }
 
@@ -1419,31 +1406,33 @@ mod tests {
 
     #[test]
     fn test_fp_mul_assign() {
-        let mut tmp = Fp::from(FpRepr::new([
-            0xcc6200000020aa8a,
-            0x422800801dd8001a,
-            0x7f4f5e619041c62c,
-            0x8a55171ac70ed2ba,
-            0x3f69cc3a3d07d58b,
-            0xb972455fd09b8ef,
-        ]));
-        tmp.mul_assign(&Fp::from(FpRepr::new([
-            0x329300000030ffcf,
-            0x633c00c02cc40028,
-            0xbef70d925862a942,
-            0x4f7fa2a82a963c17,
-            0xdf1eb2575b8bc051,
-            0x1162b680fb8e9566,
-        ])));
-        assert!(
-            tmp == Fp::from(FpRepr::new([
+        assert_eq!(
+            Fp(FpRepr::new([
+                0xcc6200000020aa8a,
+                0x422800801dd8001a,
+                0x7f4f5e619041c62c,
+                0x8a55171ac70ed2ba,
+                0x3f69cc3a3d07d58b,
+                0xb972455fd09b8ef,
+            ])
+            .0) * &Fp(FpRepr::new([
+                0x329300000030ffcf,
+                0x633c00c02cc40028,
+                0xbef70d925862a942,
+                0x4f7fa2a82a963c17,
+                0xdf1eb2575b8bc051,
+                0x1162b680fb8e9566,
+            ])
+            .0),
+            Fp(FpRepr::new([
                 0x9dc4000001ebfe14,
                 0x2850078997b00193,
                 0xa8197f1abb4d7bf,
                 0xc0309573f4bfe871,
                 0xf48d0923ffaf7620,
                 0x11d4b58c7a926e66
-            ]))
+            ])
+            .0)
         );
 
         let mut rng = XorShiftRng::from_seed([
@@ -1494,15 +1483,16 @@ mod tests {
 
     #[test]
     fn test_fp_squaring() {
-        let mut a = Fp::from(FpRepr::new([
+        let mut a = Fp(FpRepr::new([
             0xffffffffffffffff,
             0xffffffffffffffff,
             0xffffffffffffffff,
             0xffffffffffffffff,
             0xffffffffffffffff,
             0x19ffffffffffffff,
-        ]));
-        assert!(a.is_valid());
+        ])
+        .0);
+        assert!(!a.is_zero());
         a.square();
         assert_eq!(
             a,
@@ -1750,8 +1740,16 @@ mod tests {
     #[test]
     fn test_fp_display() {
         assert_eq!(
-        format!("{}", Fp::from_repr(FpRepr::new([0xa956babf9301ea24, 0x39a8f184f3535c7b, 0xb38d35b3f6779585, 0x676cc4eef4c46f2c, 0xb1d4aad87651e694, 0x1947f0d5f4fe325a])).unwrap()),
-        "Fp(0x1947f0d5f4fe325ab1d4aad87651e694676cc4eef4c46f2cb38d35b3f677958539a8f184f3535c7ba956babf9301ea24)".to_string()
+            format!("{}", Fp::from_repr(FpRepr::new([
+                0xa956babf9301ea24,
+                0x39a8f184f3535c7b,
+                0xb38d35b3f6779585,
+                0x676cc4eef4c46f2c,
+                0xb1d4aad87651e694,
+                0x1947f0d5f4fe325a
+            ])
+            ).unwrap()),
+            "Fp(0x1947f0d5f4fe325ab1d4aad87651e694676cc4eef4c46f2cb38d35b3f677958539a8f184f3535c7ba956babf9301ea24)".to_string()
     );
         assert_eq!(
         format!("{}", Fp::from_repr(FpRepr::new([0xe28e79396ac2bbf8, 0x413f6f7f06ea87eb, 0xa4b62af4a792a689, 0xb7f89f88f59c1dc5, 0x9a551859b1e43a9a, 0x6c9f5a1060de974])).unwrap()),
@@ -1807,12 +1805,32 @@ mod tests {
         for i in 0..100 {
             let a = FpRepr::from(i + 1);
             let b = FpRepr::from(i);
-            assert!(Fp::from_repr(a).unwrap() > Fp::from_repr(b).unwrap());
+            assert!(
+                Fp::from_repr(a).unwrap() > Fp::from_repr(b).unwrap(),
+                "{}: {:?} > {:?}",
+                i,
+                a,
+                b
+            );
         }
     }
 
     #[test]
     fn fp_repr_tests() {
         crate::tests::repr::random_repr_tests::<Fp>();
+    }
+
+    #[test]
+    fn test_fp_repr_conversion() {
+        let a = Fp::from(1);
+        let b = Fp::from_repr(FpRepr::from(1)).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(Fp::from(1).into_repr(), FpRepr::from(1));
+
+        let a = Fp::from(12);
+        assert_eq!(a, Fp::from_repr(a.into_repr()).unwrap());
+
+        let a = FpRepr::from(12);
+        assert_eq!(Fp::from_repr(a).unwrap().into_repr(), a);
     }
 }

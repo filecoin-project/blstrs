@@ -3,7 +3,6 @@
 use blst::*;
 
 use core::{
-    convert::TryInto,
     fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
@@ -225,14 +224,10 @@ impl Fp2 {
     }
 
     pub fn c0(&self) -> Fp {
-        self.0.fp[0]
-            .try_into()
-            .expect("underlying fp must be valid")
+        self.0.fp[0].into()
     }
 
     pub fn c1(&self) -> Fp {
-        self.0.fp[1]
-            .try_into()
-            .expect("underlying fp must be valid")
+        self.0.fp[1].into()
     }
 }
