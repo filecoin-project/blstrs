@@ -8,13 +8,225 @@ use core::{
     fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use fff::Field;
 
 /// `Fp` values are always in
 /// Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
 #[derive(Copy, Clone)]
 pub struct Fp(pub(crate) blst_fp);
 
+/// Representation of a `Fp`, in regular coordinates.
+#[derive(Default, Clone, Copy)]
+pub struct FpRepr(blst_fp);
+
+impl AsRef<[u64]> for FpRepr {
+    fn as_ref(&self) -> &[u64] {
+        &self.0.l
+    }
+}
+
+impl AsMut<[u64]> for FpRepr {
+    fn as_mut(&mut self) -> &mut [u64] {
+        &mut self.0.l
+    }
+}
+
+const LIMBS: usize = 6;
+const LIMB_BITS: usize = 64;
+
+impl fmt::Debug for FpRepr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x")?;
+        for &b in self.0.l.iter().rev() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for FpRepr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x")?;
+        for &b in self.0.l.iter().rev() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<u32> for FpRepr {
+    fn from(val: u32) -> FpRepr {
+        let mut raw = blst_fp::default();
+
+        unsafe { blst_fp_from_uint32(&mut raw as *mut _, val as *const _) };
+
+        FpRepr(raw)
+    }
+}
+
+impl From<u64> for FpRepr {
+    fn from(val: u64) -> FpRepr {
+        let mut raw = blst_fp::default();
+
+        unsafe { blst_fp_from_uint64(&mut raw as *mut _, val as *const _) };
+
+        FpRepr(raw)
+    }
+}
+
+impl Ord for FpRepr {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for (a, b) in self.0.l.iter().rev().zip(other.0.l.iter().rev()) {
+            if a < b {
+                return std::cmp::Ordering::Less;
+            } else if a > b {
+                return std::cmp::Ordering::Greater;
+            }
+        }
+
+        std::cmp::Ordering::Equal
+    }
+}
+
+impl PartialOrd for FpRepr {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for FpRepr {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.0.l == other.0.l
+    }
+}
+impl Eq for FpRepr {}
+
+impl fff::PrimeFieldRepr for FpRepr {
+    fn sub_noborrow(&mut self, other: &Self) {
+        let mut borrow = 0;
+
+        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+            *a = fff::sbb(*a, *b, &mut borrow);
+        }
+    }
+
+    fn add_nocarry(&mut self, other: &Self) {
+        let mut carry = 0;
+
+        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+            *a = fff::adc(*a, *b, &mut carry);
+        }
+    }
+
+    fn num_bits(&self) -> u32 {
+        let mut ret = (LIMBS as u32) * LIMB_BITS as u32;
+        for i in self.0.l.iter().rev() {
+            let leading = i.leading_zeros();
+            ret -= leading;
+            if leading != LIMB_BITS as u32 {
+                break;
+            }
+        }
+
+        ret
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.l.iter().all(|&e| e == 0)
+    }
+
+    fn is_odd(&self) -> bool {
+        self.0.l[0] & 1 == 1
+    }
+
+    fn is_even(&self) -> bool {
+        !self.is_odd()
+    }
+
+    fn div2(&mut self) {
+        let mut t = 0;
+        for i in self.0.l.iter_mut().rev() {
+            let t2 = *i << 63;
+            *i >>= 1;
+            *i |= t;
+            t = t2;
+        }
+    }
+
+    fn shr(&mut self, mut n: u32) {
+        if n as usize >= LIMB_BITS * LIMBS {
+            *self = Self::from(0u32);
+            return;
+        }
+
+        while n >= LIMB_BITS as u32 {
+            let mut t = 0;
+            for i in self.0.l.iter_mut().rev() {
+                std::mem::swap(&mut t, i);
+            }
+            n -= LIMB_BITS as u32;
+        }
+
+        if n > 0 {
+            let mut t = 0;
+            for i in self.0.l.iter_mut().rev() {
+                let t2 = *i << (LIMB_BITS as u32 - n);
+                *i >>= n;
+                *i |= t;
+                t = t2;
+            }
+        }
+    }
+
+    fn mul2(&mut self) {
+        let mut last = 0;
+        for i in &mut self.0.l {
+            let tmp = *i >> 63;
+            *i <<= 1;
+            *i |= last;
+            last = tmp;
+        }
+    }
+
+    fn shl(&mut self, mut n: u32) {
+        if n as usize >= LIMB_BITS * LIMBS {
+            *self = Self::from(0u32);
+            return;
+        }
+
+        while n >= LIMB_BITS as u32 {
+            let mut t = 0;
+            for i in &mut self.0.l {
+                std::mem::swap(&mut t, i);
+            }
+            n -= LIMB_BITS as u32;
+        }
+
+        if n > 0 {
+            let mut t = 0;
+            for i in &mut self.0.l {
+                let t2 = *i >> (LIMB_BITS as u32 - n);
+                *i <<= n;
+                *i |= t;
+                t = t2;
+            }
+        }
+    }
+}
+
 impl fmt::Debug for Fp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let tmp = self.to_bytes_le();
+        write!(f, "0x")?;
+        for &b in tmp.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for Fp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
         write!(f, "0x")?;
@@ -47,6 +259,21 @@ impl TryInto<Fp> for blst_fp {
         }
 
         Ok(fp)
+    }
+}
+
+impl From<Fp> for FpRepr {
+    fn from(val: Fp) -> Self {
+        let raw: blst_fp = val.into();
+        FpRepr(raw)
+    }
+}
+
+impl From<FpRepr> for Fp {
+    fn from(val: FpRepr) -> Self {
+        let mut raw = blst_fp::default();
+        unsafe { blst_fp_from(&mut raw, &val.0) };
+        Fp(raw)
     }
 }
 
@@ -124,18 +351,35 @@ impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
 impl_binops_additive!(Fp, Fp);
 impl_binops_multiplicative!(Fp, Fp);
 
-impl Fp {
-    /// Returns zero, the additive identity.
-    #[inline]
-    pub const fn zero() -> Fp {
+impl fff::Field for Fp {
+    fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
+        use fff::PrimeField;
+
+        // The number of bits we should "shave" from a randomly sampled reputation.
+        const REPR_SHAVE_BITS: usize = 384 - Fp::NUM_BITS as usize;
+
+        loop {
+            let mut raw = blst_fp::default();
+            for i in 0..4 {
+                raw.l[i] = rng.next_u64();
+            }
+
+            // Mask away the unused most-significant bits.
+            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+            if let Ok(valid_el) = raw.try_into() {
+                return valid_el;
+            }
+        }
+    }
+
+    fn zero() -> Self {
         Fp(blst_fp {
             l: [0, 0, 0, 0, 0, 0],
         })
     }
 
-    /// Returns one, the multiplicative identity.
-    #[inline]
-    pub const fn one() -> Fp {
+    fn one() -> Self {
         Fp(blst_fp {
             l: [
                 0x760900000002fffd,
@@ -148,10 +392,111 @@ impl Fp {
         })
     }
 
-    pub fn is_zero(&self) -> bool {
-        self == &Fp::zero()
+    fn is_zero(&self) -> bool {
+        self == &Self::zero()
     }
 
+    fn square(&mut self) {
+        let mut raw = blst_fp::default();
+        unsafe { blst_fp_sqr(&mut raw, &self.0) }
+
+        self.0 = raw;
+    }
+
+    fn double(&mut self) {
+        *self += *self;
+    }
+
+    fn negate(&mut self) {
+        *self = -&*self;
+    }
+    fn add_assign(&mut self, other: &Self) {
+        *self += other;
+    }
+
+    fn sub_assign(&mut self, other: &Self) {
+        *self -= other;
+    }
+
+    fn mul_assign(&mut self, other: &Self) {
+        *self *= other;
+    }
+
+    fn inverse(&self) -> Option<Self> {
+        todo!()
+    }
+
+    fn frobenius_map(&mut self, power: usize) {
+        todo!()
+    }
+}
+
+impl fff::PrimeField for Fp {
+    type Repr = FpRepr;
+
+    const NUM_BITS: u32 = 381;
+    const CAPACITY: u32 = Self::NUM_BITS - 1;
+    const S: u32 = 1;
+
+    fn from_repr(repr: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
+        repr.0.try_into().map_err(|err: NotInFieldError| {
+            fff::PrimeFieldDecodingError::NotInField(err.to_string())
+        })
+    }
+
+    /// Convert a biginteger representation into a prime field element, if
+    /// the number is an element of the field.
+    fn into_repr(&self) -> Self::Repr {
+        (*self).into()
+    }
+
+    fn char() -> Self::Repr {
+        FpRepr(blst_fp {
+            l: [
+                13402431016077863595,
+                2210141511517208575,
+                7435674573564081700,
+                7239337960414712511,
+                5412103778470702295,
+                1873798617647539866,
+            ],
+        })
+        .into()
+    }
+
+    fn multiplicative_generator() -> Self {
+        FpRepr(blst_fp {
+            l: [2, 0, 0, 0, 0, 0],
+        })
+        .into()
+    }
+
+    fn root_of_unity() -> Self {
+        FpRepr(blst_fp {
+            l: [
+                13402431016077863594,
+                2210141511517208575,
+                7435674573564081700,
+                7239337960414712511,
+                5412103778470702295,
+                1873798617647539866,
+            ],
+        })
+        .into()
+    }
+}
+
+impl fff::SqrtField for Fp {
+    fn legendre(&self) -> fff::LegendreSymbol {
+        todo!()
+    }
+
+    fn sqrt(&self) -> Option<Self> {
+        todo!()
+    }
+}
+
+impl Fp {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
     pub fn from_bytes_le(bytes: &[u8; 48]) -> Option<Fp> {
@@ -160,7 +505,7 @@ impl Fp {
         let mut raw = blst_fp::default();
 
         unsafe {
-            blst_fp_from_lendian(&mut raw as _, in_v.as_mut_ptr());
+            blst_fp_from_lendian(&mut raw, in_v.as_mut_ptr());
         }
 
         raw.try_into().ok()
@@ -174,7 +519,7 @@ impl Fp {
         let mut raw = blst_fp::default();
 
         unsafe {
-            blst_fp_from_bendian(&mut raw as _, in_v.as_mut_ptr());
+            blst_fp_from_bendian(&mut raw, in_v.as_mut_ptr());
         }
 
         raw.try_into().ok()
@@ -325,7 +670,7 @@ impl Fp {
     pub fn mul3(&self) -> Self {
         let mut out = blst_fp::default();
 
-        unsafe { blst_fp_mul_by_3(&mut out as _, &self.0 as _) };
+        unsafe { blst_fp_mul_by_3(&mut out, &self.0) };
 
         Fp(out)
     }
@@ -334,7 +679,7 @@ impl Fp {
     pub fn mul8(&self) -> Self {
         let mut out = blst_fp::default();
 
-        unsafe { blst_fp_mul_by_8(&mut out as _, &self.0 as _) };
+        unsafe { blst_fp_mul_by_8(&mut out, &self.0) };
 
         Fp(out)
     }
@@ -343,7 +688,7 @@ impl Fp {
     pub fn shl(&self, count: usize) -> Self {
         let mut out = blst_fp::default();
 
-        unsafe { blst_fp_lshift(&mut out as _, &self.0 as _, count) };
+        unsafe { blst_fp_lshift(&mut out, &self.0, count) };
 
         Fp(out)
     }

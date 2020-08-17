@@ -7,6 +7,7 @@ use core::{
     fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use fff::Field;
 
 use crate::Fp;
 

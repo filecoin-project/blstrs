@@ -7,6 +7,7 @@ use core::{
 };
 
 use blst::*;
+use fff::Field;
 use rand_core::RngCore;
 
 use crate::{Fp, Scalar};
