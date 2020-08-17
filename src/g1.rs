@@ -7,7 +7,6 @@ use core::{
 };
 
 use blst::*;
-use fff::Field;
 use rand_core::RngCore;
 
 use crate::{Fp, Scalar};
@@ -185,9 +184,7 @@ impl G1Affine {
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
 
-        if unsafe {
-            blst_p1_deserialize(&mut raw as _, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS
-        } {
+        if unsafe { blst_p1_deserialize(&mut raw, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS } {
             return None;
         }
 
@@ -215,9 +212,7 @@ impl G1Affine {
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
 
-        if unsafe {
-            blst_p1_uncompress(&mut raw as _, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS
-        } {
+        if unsafe { blst_p1_uncompress(&mut raw, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS } {
             return None;
         }
 
@@ -539,6 +534,7 @@ impl G1Projective {
 mod tests {
     use super::*;
 
+    use fff::Field;
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
@@ -616,8 +612,9 @@ mod tests {
         ]);
 
         let gen = G1Affine::one();
-        let mut test =
-            G1Projective::from_raw_unchecked(gen.x() * (z.square()), gen.y() * (z.square() * z), z);
+        let mut z2 = z.clone();
+        z2.square();
+        let mut test = G1Projective::from_raw_unchecked(gen.x() * z2, gen.y() * (z2 * z), z);
 
         assert!(test.is_on_curve());
 
@@ -655,8 +652,9 @@ mod tests {
             0x12b108ac33643c3e,
         ]);
 
-        let mut c =
-            G1Projective::from_raw_unchecked(a.x() * (z.square()), a.y() * (z.square() * z), z);
+        let mut z2 = z.clone();
+        z2.square();
+        let mut c = G1Projective::from_raw_unchecked(a.x() * z2, a.y() * (z2 * z), z);
         assert!(c.is_on_curve());
 
         assert!(a == c);
@@ -699,7 +697,9 @@ mod tests {
             0x12b108ac33643c3e,
         ]);
 
-        let c = G1Projective::from_raw_unchecked(a.x() * (z.square()), a.y() * (z.square() * z), z);
+        let mut z2 = z.clone();
+        z2.square();
+        let c = G1Projective::from_raw_unchecked(a.x() * z2, a.y() * (z2 * z), z);
 
         assert_eq!(G1Affine::from(c), G1Affine::one());
     }
@@ -774,11 +774,9 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                b = G1Projective::from_raw_unchecked(
-                    b.x() * (z.square()),
-                    b.y() * (z.square() * z),
-                    z,
-                );
+                let mut z2 = z.clone();
+                z2.square();
+                b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
             let c = a + b;
             assert!(!c.is_zero());
@@ -798,11 +796,9 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                b = G1Projective::from_raw_unchecked(
-                    b.x() * (z.square()),
-                    b.y() * (z.square() * z),
-                    z,
-                );
+                let mut z2 = z.clone();
+                z2.square();
+                b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
             let c = b + a;
             assert!(!c.is_zero());
@@ -827,7 +823,7 @@ mod tests {
 
         // Degenerate case
         {
-            let beta = Fp::from_raw_unchecked([
+            let mut beta = Fp::from_raw_unchecked([
                 0xcd03c9e48671f071,
                 0x5dab22461fcda5d2,
                 0x587042afd3851b95,
@@ -835,7 +831,7 @@ mod tests {
                 0x3f97d6e83d050d2,
                 0x18f0206554638741,
             ]);
-            let beta = beta.square();
+            beta.square();
             let a = G1Projective::one().double().double();
             let b = G1Projective::from_raw_unchecked(a.x() * beta, -a.y(), a.z());
             assert!(a.is_on_curve());
@@ -891,11 +887,9 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                b = G1Projective::from_raw_unchecked(
-                    b.x() * (z.square()),
-                    b.y() * (z.square() * z),
-                    z,
-                );
+                let mut z2 = z.clone();
+                z2.square();
+                b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
             let c = a + b;
             assert!(!c.is_zero());
@@ -915,11 +909,9 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                b = G1Projective::from_raw_unchecked(
-                    b.x() * (z.square()),
-                    b.y() * (z.square() * z),
-                    z,
-                );
+                let mut z2 = z.clone();
+                z2.square();
+                b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
             let c = b + a;
             assert!(!c.is_zero());
@@ -944,7 +936,7 @@ mod tests {
 
         // Degenerate case
         {
-            let beta = Fp::from_raw_unchecked([
+            let mut beta = Fp::from_raw_unchecked([
                 0xcd03c9e48671f071,
                 0x5dab22461fcda5d2,
                 0x587042afd3851b95,
@@ -952,7 +944,7 @@ mod tests {
                 0x3f97d6e83d050d2,
                 0x18f0206554638741,
             ]);
-            let beta = beta.square();
+            beta.square();
             let a = G1Projective::one().double().double();
             let b = G1Projective::from_raw_unchecked(a.x() * beta, -a.y(), a.z());
             let a = G1Affine::from(a);

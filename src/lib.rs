@@ -15,6 +15,7 @@ mod pairing;
 mod scalar;
 mod traits;
 
+pub use fff::*;
 pub use fp::Fp;
 pub use fp12::Fp12;
 pub use fp2::Fp2;
@@ -24,6 +25,9 @@ pub use g2::{G2Affine, G2Prepared, G2Projective};
 pub use pairing::*;
 pub use scalar::{Scalar, S as SCALAR_S};
 pub use traits::*;
+
+#[cfg(test)]
+mod tests;
 
 /// Bls12-381 engine
 #[derive(Debug, Copy, Clone)]

@@ -201,7 +201,7 @@ impl Fp2 {
     pub fn mul3(&self) -> Self {
         let mut out = blst_fp2::default();
 
-        unsafe { blst_fp2_mul_by_3(&mut out as _, &self.0 as _) };
+        unsafe { blst_fp2_mul_by_3(&mut out, &self.0) };
 
         Fp2(out)
     }
@@ -210,7 +210,7 @@ impl Fp2 {
     pub fn mul8(&self) -> Self {
         let mut out = blst_fp2::default();
 
-        unsafe { blst_fp2_mul_by_8(&mut out as _, &self.0 as _) };
+        unsafe { blst_fp2_mul_by_8(&mut out, &self.0) };
 
         Fp2(out)
     }
@@ -219,7 +219,7 @@ impl Fp2 {
     pub fn shl(&self, count: usize) -> Self {
         let mut out = blst_fp2::default();
 
-        unsafe { blst_fp2_lshift(&mut out as _, &self.0 as _, count) };
+        unsafe { blst_fp2_lshift(&mut out, &self.0, count) };
 
         Fp2(out)
     }
