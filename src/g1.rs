@@ -65,7 +65,7 @@ impl Neg for &G1Affine {
 
     #[inline]
     fn neg(self) -> G1Affine {
-        let mut res = self.clone();
+        let mut res = *self;
 
         // Missing for affine in blst
         if !self.is_zero() {
@@ -303,7 +303,7 @@ impl G1Affine {
         }))
     }
 
-    pub fn from_raw_unchecked(x: Fp, y: Fp, infinity: bool) -> Self {
+    pub fn from_raw_unchecked(x: Fp, y: Fp, _infinity: bool) -> Self {
         let mut raw = blst_p1_affine::default();
         raw.x = x.0;
         raw.y = y.0;
@@ -716,7 +716,7 @@ impl groupy::CurveProjective for G1Projective {
         ret
     }
 
-    fn hash(msg: &[u8]) -> Self {
+    fn hash(_msg: &[u8]) -> Self {
         unimplemented!("not supported");
     }
 }
@@ -886,7 +886,7 @@ mod tests {
         ]);
 
         let gen = G1Affine::one();
-        let mut z2 = z.clone();
+        let mut z2 = z;
         z2.square();
         let mut test = G1Projective::from_raw_unchecked(gen.x() * z2, gen.y() * (z2 * z), z);
 
@@ -971,7 +971,7 @@ mod tests {
             0x12b108ac33643c3e,
         ]);
 
-        let mut z2 = z.clone();
+        let mut z2 = z;
         z2.square();
         let c = G1Projective::from_raw_unchecked(a.x() * z2, a.y() * (z2 * z), z);
 
@@ -1072,7 +1072,7 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                let mut z2 = z.clone();
+                let mut z2 = z;
                 z2.square();
                 b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
@@ -1091,7 +1091,7 @@ mod tests {
 
             let mut d = G1Projective::one();
             for _ in 0..5 {
-                d = d + G1Projective::one();
+                d += G1Projective::one();
             }
             assert!(!c.is_zero());
             assert!(c.is_on_curve());
@@ -1168,7 +1168,7 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                let mut z2 = z.clone();
+                let mut z2 = z;
                 z2.square();
                 b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }
@@ -1190,7 +1190,7 @@ mod tests {
                     0x12b108ac33643c3e,
                 ]);
 
-                let mut z2 = z.clone();
+                let mut z2 = z;
                 z2.square();
                 b = G1Projective::from_raw_unchecked(b.x() * (z2), b.y() * (z2 * z), z);
             }

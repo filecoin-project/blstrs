@@ -365,7 +365,7 @@ impl Field for Fp6 {
         tmp2 *= &c0;
         tmp1 += &tmp2;
         match tmp1.inverse() {
-            Some(t) => Some(Fp6::new(t * &c0, t * &c1, t * &c2)),
+            Some(t) => Some(Fp6::new(t * c0, t * c1, t * c2)),
             None => None,
         }
     }
@@ -373,7 +373,7 @@ impl Field for Fp6 {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Fp, Fp2, Fp6};
+    use crate::{Fp2, Fp6};
 
     use fff::{Field, PrimeField};
     use rand_core::SeedableRng;

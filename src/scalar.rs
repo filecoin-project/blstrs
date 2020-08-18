@@ -2,13 +2,14 @@
 //! where `q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001`
 
 use core::{
+    cmp,
     convert::TryInto,
-    fmt,
+    fmt, mem,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 use blst::*;
-use fff::{Field, PrimeField, PrimeFieldRepr};
+use fff::{Field, PrimeField};
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
 /// curve construction.
@@ -55,16 +56,6 @@ const R: Scalar = Scalar(blst_fr {
     ],
 });
 
-/// R^2 = 2^512 mod q
-const R2: Scalar = Scalar(blst_fr {
-    l: [
-        0xc999e990f3f29c6d,
-        0x2b6cedcb87925c23,
-        0x05d314967254398f,
-        0x0748d9d99f59ff11,
-    ],
-});
-
 impl fmt::Debug for ScalarRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x")?;
@@ -92,21 +83,25 @@ impl From<u64> for ScalarRepr {
 }
 
 impl Ord for ScalarRepr {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         for (a, b) in self.0.l.iter().rev().zip(other.0.l.iter().rev()) {
-            if a < b {
-                return std::cmp::Ordering::Less;
-            } else if a > b {
-                return std::cmp::Ordering::Greater;
+            match a.cmp(b) {
+                cmp::Ordering::Greater => {
+                    return cmp::Ordering::Greater;
+                }
+                cmp::Ordering::Less => {
+                    return cmp::Ordering::Less;
+                }
+                cmp::Ordering::Equal => {}
             }
         }
 
-        std::cmp::Ordering::Equal
+        cmp::Ordering::Equal
     }
 }
 
 impl PartialOrd for ScalarRepr {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -180,7 +175,7 @@ impl fff::PrimeFieldRepr for ScalarRepr {
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
             for i in self.0.l.iter_mut().rev() {
-                std::mem::swap(&mut t, i);
+                mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
         }
@@ -215,7 +210,7 @@ impl fff::PrimeFieldRepr for ScalarRepr {
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
             for i in &mut self.0.l {
-                std::mem::swap(&mut t, i);
+                mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
         }
@@ -817,7 +812,7 @@ impl Scalar {
 
 #[cfg(test)]
 mod tests {
-    use super::{Scalar, ScalarRepr, R2};
+    use super::{Scalar, ScalarRepr, MODULUS, R};
 
     use fff::{Field, PrimeField, PrimeFieldRepr, SqrtField};
     use rand_core::SeedableRng;
@@ -826,35 +821,24 @@ mod tests {
     /// INV = -(q^{-1} mod 2^64) mod 2^64
     const INV: u64 = 0xfffffffeffffffff;
 
-    /// q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
-    fn MODULUS() -> Scalar {
-        Scalar(Scalar::char().0)
-    }
+    /// R^2 = 2^512 mod q
+    const R2: Scalar = Scalar(blst::blst_fr {
+        l: [
+            0xc999e990f3f29c6d,
+            0x2b6cedcb87925c23,
+            0x05d314967254398f,
+            0x0748d9d99f59ff11,
+        ],
+    });
 
-    /// R = 2^256 mod q
-    fn R() -> Scalar {
-        Scalar(
-            ScalarRepr::new([
-                0x00000001fffffffe,
-                0x5884b7fa00034802,
-                0x998c4fefecbc4ff5,
-                0x1824b159acc5056f,
-            ])
-            .0,
-        )
-    }
-
-    fn LARGEST() -> Scalar {
-        Scalar(
-            ScalarRepr::new([
-                0xffffffff00000000,
-                0x53bda402fffe5bfe,
-                0x3339d80809a1d805,
-                0x73eda753299d7d48,
-            ])
-            .0,
-        )
-    }
+    const LARGEST: Scalar = Scalar(blst::blst_fr {
+        l: [
+            0xffffffff00000000,
+            0x53bda402fffe5bfe,
+            0x3339d80809a1d805,
+            0x73eda753299d7d48,
+        ],
+    });
 
     #[test]
     fn test_inv() {
@@ -864,7 +848,7 @@ mod tests {
         let mut inv = 1u64;
         for _ in 0..63 {
             inv = inv.wrapping_mul(inv);
-            inv = inv.wrapping_mul(MODULUS().0.l[0]);
+            inv = inv.wrapping_mul(MODULUS.0.l[0]);
         }
         inv = inv.wrapping_neg();
 
@@ -1003,8 +987,8 @@ mod tests {
 
     #[test]
     fn test_addition() {
-        let mut tmp = LARGEST();
-        tmp += &LARGEST();
+        let mut tmp = LARGEST;
+        tmp += &LARGEST;
 
         assert_eq!(
             tmp,
@@ -1019,7 +1003,7 @@ mod tests {
             )
         );
 
-        let mut tmp = LARGEST();
+        let mut tmp = LARGEST;
         tmp += &Scalar(ScalarRepr::new([1, 0, 0, 0]).0);
 
         assert_eq!(tmp, Scalar::zero());
@@ -1027,14 +1011,14 @@ mod tests {
 
     #[test]
     fn test_negation() {
-        let tmp = -&LARGEST();
+        let tmp = -&LARGEST;
 
         assert_eq!(tmp, Scalar(ScalarRepr::new([1, 0, 0, 0]).0));
 
         let tmp = -&Scalar::zero();
         assert_eq!(tmp, Scalar::zero());
         let tmp = -&Scalar(ScalarRepr::new([1, 0, 0, 0]).0);
-        assert_eq!(tmp, LARGEST());
+        assert_eq!(tmp, LARGEST);
 
         {
             let mut a = Scalar::zero();
@@ -1061,16 +1045,16 @@ mod tests {
 
     #[test]
     fn test_subtraction() {
-        let mut tmp = LARGEST();
-        tmp -= &LARGEST();
+        let mut tmp = LARGEST;
+        tmp -= &LARGEST;
 
         assert_eq!(tmp, Scalar::zero());
 
         let mut tmp = Scalar::zero();
-        tmp -= &LARGEST();
+        tmp -= &LARGEST;
 
-        let mut tmp2 = MODULUS();
-        tmp2 -= &LARGEST();
+        let mut tmp2 = Scalar(MODULUS.0);
+        tmp2 -= &LARGEST;
 
         assert_eq!(tmp, tmp2);
     }
@@ -1162,8 +1146,8 @@ mod tests {
             0x73eda753299d7d48,
         ];
 
-        let mut r1 = R();
-        let mut r2 = R();
+        let mut r1 = R;
+        let mut r2 = R;
 
         for _ in 0..100 {
             r1 = r1.inverse().unwrap();
@@ -1171,7 +1155,7 @@ mod tests {
 
             assert_eq!(r1, r2);
             // Add R so we check something different next time around
-            r1 += &R();
+            r1 += &R;
             r2 = r1;
         }
     }
@@ -1219,9 +1203,9 @@ mod tests {
             Scalar::from_raw([0xffffffffffffffff; 4])
         );
 
-        assert_eq!(Scalar::from_raw(MODULUS().0.l), Scalar::zero());
+        assert_eq!(Scalar::from_raw(MODULUS.0.l), Scalar::zero());
 
-        assert_eq!(Scalar::from_raw([1, 0, 0, 0]), R());
+        assert_eq!(Scalar::from_raw([1, 0, 0, 0]), R);
     }
 
     #[test]
@@ -1233,7 +1217,7 @@ mod tests {
             0x1824b159acc50562,
         ]);
 
-        let mut b = a.clone();
+        let mut b = a;
         b.double();
         assert_eq!(b, a + a);
     }
@@ -2004,7 +1988,6 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        use fff::PrimeField;
         let one = Scalar::one();
 
         for i in 0..1000 {

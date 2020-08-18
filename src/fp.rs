@@ -4,8 +4,9 @@
 use blst::*;
 
 use core::{
+    cmp,
     convert::TryInto,
-    fmt,
+    fmt, mem,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use fff::{Field, PrimeField};
@@ -321,21 +322,25 @@ impl From<u64> for Fp {
 }
 
 impl Ord for FpRepr {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         for (a, b) in self.0.l.iter().rev().zip(other.0.l.iter().rev()) {
-            if a < b {
-                return std::cmp::Ordering::Less;
-            } else if a > b {
-                return std::cmp::Ordering::Greater;
+            match a.cmp(b) {
+                cmp::Ordering::Greater => {
+                    return cmp::Ordering::Greater;
+                }
+                cmp::Ordering::Less => {
+                    return cmp::Ordering::Less;
+                }
+                cmp::Ordering::Equal => {}
             }
         }
 
-        std::cmp::Ordering::Equal
+        cmp::Ordering::Equal
     }
 }
 
 impl PartialOrd for FpRepr {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -409,7 +414,7 @@ impl fff::PrimeFieldRepr for FpRepr {
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
             for i in self.0.l.iter_mut().rev() {
-                std::mem::swap(&mut t, i);
+                mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
         }
@@ -444,7 +449,7 @@ impl fff::PrimeFieldRepr for FpRepr {
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
             for i in &mut self.0.l {
-                std::mem::swap(&mut t, i);
+                mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
         }
@@ -464,14 +469,14 @@ impl fff::PrimeFieldRepr for FpRepr {
 /// Elements are ordered lexicographically.
 impl Ord for Fp {
     #[inline(always)]
-    fn cmp(&self, other: &Fp) -> ::std::cmp::Ordering {
+    fn cmp(&self, other: &Fp) -> cmp::Ordering {
         self.into_repr().cmp(&other.into_repr())
     }
 }
 
 impl PartialOrd for Fp {
     #[inline(always)]
-    fn partial_cmp(&self, other: &Fp) -> Option<::std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Fp) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -967,7 +972,7 @@ mod tests {
 
     #[test]
     fn test_fp_repr_ordering() {
-        use std::cmp::Ordering;
+        use core::cmp::Ordering;
 
         fn assert_equality(a: FpRepr, b: FpRepr) {
             assert_eq!(a, b);

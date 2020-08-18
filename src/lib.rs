@@ -2,6 +2,9 @@
 //!
 //! An implementation of the BLS12-381 pairing-friendly elliptic curve construction.
 
+#![deny(clippy::all, clippy::perf, clippy::correctness)]
+#![allow(clippy::many_single_char_names)]
+
 #[macro_use]
 mod macros;
 

@@ -214,8 +214,8 @@ impl Fp2 {
     /// Multiply this element by the cubic and quadratic nonresidue 1 + u.
     pub fn mul_by_nonresidue(&mut self) {
         let t0 = self.c0();
-        let c0 = self.c0() - &self.c1();
-        let c1 = self.c1() + &t0;
+        let c0 = self.c0() - self.c1();
+        let c1 = self.c1() + t0;
 
         self.0.fp[0] = c0.0;
         self.0.fp[1] = c1.0;
@@ -372,20 +372,20 @@ mod tests {
     #[test]
     fn test_fp2_ordering() {
         let mut a = Fp2::new(Fp::zero(), Fp::zero());
-        let mut b = a.clone();
+        let mut b = a;
 
         assert!(a.cmp(&b) == Ordering::Equal);
-        b.0.fp[0] = (b.c0() + &Fp::one()).0;
+        b.0.fp[0] = (b.c0() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[0] = (a.c0() + &Fp::one()).0;
+        a.0.fp[0] = (a.c0() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Equal);
-        b.0.fp[1] = (b.c1() + &Fp::one()).0;
+        b.0.fp[1] = (b.c1() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[0] = (a.c0() + &Fp::one()).0;
+        a.0.fp[0] = (a.c0() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[1] = (a.c1() + &Fp::one()).0;
+        a.0.fp[1] = (a.c1() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Greater);
-        b.0.fp[0] = (b.c0() + &Fp::one()).0;
+        b.0.fp[0] = (b.c0() + Fp::one()).0;
         assert!(a.cmp(&b) == Ordering::Equal);
     }
 

@@ -320,7 +320,7 @@ impl G2Affine {
         todo!()
     }
 
-    pub fn from_raw_unchecked(x: Fp2, y: Fp2, infinity: bool) -> Self {
+    pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {
         let mut raw = blst_p2_affine::default();
         raw.x = x.0;
         raw.y = y.0;
@@ -773,7 +773,7 @@ impl groupy::CurveProjective for G2Projective {
         ret
     }
 
-    fn hash(msg: &[u8]) -> Self {
+    fn hash(_msg: &[u8]) -> Self {
         unimplemented!("not supported");
     }
 }

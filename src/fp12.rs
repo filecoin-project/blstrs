@@ -541,7 +541,7 @@ impl Field for Fp12 {
 
         c0s.inverse().map(|t| {
             Fp12(blst_fp12 {
-                fp6: [(t * &self.c0()).0, (-(t * &self.c1())).0],
+                fp6: [(t * self.c0()).0, (-(t * self.c1())).0],
             })
         })
     }
@@ -552,8 +552,6 @@ mod tests {
     use super::Fp12;
 
     use fff::PrimeField;
-    use rand_core::SeedableRng;
-    use rand_xorshift::XorShiftRng;
 
     #[test]
     fn fp12_random_frobenius_tests() {
