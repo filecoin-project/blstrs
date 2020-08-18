@@ -12,7 +12,7 @@ use fff::{Field, PrimeField, PrimeFieldRepr, SqrtField};
 use groupy::{CurveAffine, CurveProjective};
 use rand_core::RngCore;
 
-use crate::{Fp, Scalar, ScalarRepr};
+use crate::{Fp, Fp12, G2Affine, Scalar, ScalarRepr};
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -328,6 +328,11 @@ impl G1Affine {
 
     pub const fn compressed_size() -> usize {
         48
+    }
+
+    fn perform_pairing(&self, other: &G2Affine) -> Fp12 {
+        use crate::Engine;
+        crate::Bls12::pairing(*self, *other)
     }
 }
 
@@ -781,6 +786,20 @@ impl groupy::EncodedPoint for G1Compressed {
 impl fmt::Debug for G1Compressed {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.0[..].fmt(formatter)
+    }
+}
+
+impl crate::PairingCurveAffine for G1Affine {
+    type Prepared = G1Affine;
+    type Pair = G2Affine;
+    type PairingResult = Fp12;
+
+    fn prepare(&self) -> Self::Prepared {
+        *self
+    }
+
+    fn pairing_with(&self, other: &Self::Pair) -> Self::PairingResult {
+        self.perform_pairing(other)
     }
 }
 
