@@ -205,7 +205,7 @@ impl G1Affine {
     /// Attempts to deserialize an uncompressed element.
     pub fn from_uncompressed(bytes: &[u8; 96]) -> Option<Self> {
         G1Affine::from_uncompressed_unchecked(bytes).and_then(|el| {
-            if el.is_torsion_free() && el.is_on_curve() {
+            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
                 Some(el)
             } else {
                 None
@@ -219,10 +219,12 @@ impl G1Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_uncompressed()` instead.
     pub fn from_uncompressed_unchecked(bytes: &[u8; 96]) -> Option<Self> {
+        if bytes.iter().all(|&b| b == 0) {
+            return Some(Self::zero());
+        }
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
-
         if unsafe { blst_p1_deserialize(&mut raw, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS } {
             return None;
         }
@@ -233,7 +235,7 @@ impl G1Affine {
     /// Attempts to deserialize a compressed element.
     pub fn from_compressed(bytes: &[u8; 48]) -> Option<Self> {
         G1Affine::from_compressed_unchecked(bytes).and_then(|el| {
-            if el.is_torsion_free() && el.is_on_curve() {
+            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
                 Some(el)
             } else {
                 None
@@ -247,6 +249,10 @@ impl G1Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> Option<Self> {
+        if bytes.iter().all(|&b| b == 0) {
+            return Some(Self::zero());
+        }
+
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
@@ -584,8 +590,7 @@ impl groupy::CurveProjective for G1Projective {
         G1Affine::one().into()
     }
 
-    // The point at infinity is always represented by
-    // Z = 0.
+    // The point at infinity is always represented by Z = 0.
     fn is_zero(&self) -> bool {
         self == &Self::zero()
     }
@@ -595,68 +600,15 @@ impl groupy::CurveProjective for G1Projective {
     }
 
     fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
-        // Montgomery’s Trick and Fast Implementation of Masked AES
-        // Genelle, Prouff and Quisquater
-        // Section 3.2
+        for el in v {
+            let el = el.borrow_mut();
+            let mut out = blst_p1_affine::default();
 
-        // First pass: compute [a, ab, abc, ...]
-        let mut prod = Vec::with_capacity(v.len());
-        let mut tmp = Fp::one();
-        for g in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            // Ignore normalized elements
-            .filter(|g| !g.is_normalized())
-        {
-            tmp *= &g.z();
-            prod.push(tmp);
-        }
+            unsafe { blst_p1_to_affine(&mut out, &el.0) };
 
-        // Invert `tmp`.
-        tmp = tmp.inverse().unwrap(); // Guaranteed to be nonzero.
-
-        // Second pass: iterate backwards to compute inverses
-        for (g, s) in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            // Backwards
-            .rev()
-            // Ignore normalized elements
-            .filter(|g| !g.is_normalized())
-            // Backwards, skip last element, fill in one for last term.
-            .zip(prod.into_iter().rev().skip(1).chain(Some(Fp::one())))
-        {
-            // tmp := tmp * g.z; g.z := tmp * s = 1/z
-            let mut newtmp = tmp;
-            newtmp *= &g.z();
-            {
-                let mut x = tmp;
-                x *= &s;
-                g.0.z = s.0;
-            }
-            tmp = newtmp;
-        }
-
-        // Perform affine transformations
-        for g in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            .filter(|g| !g.is_normalized())
-        {
-            let mut z = g.z(); // 1/z
-            z.square(); // 1/z^2
-            {
-                let mut x = g.x();
-                x *= &z; // x/z^2
-                g.0.x = x.0;
-            }
-            z *= &g.z(); // 1/z^3
-            {
-                let mut y = g.y();
-                y *= &z; // y/z^3
-                g.0.y = y.0;
-            }
-            g.0.z = Fp::one().0; // z = 1
+            el.0.x = out.x;
+            el.0.y = out.y;
+            el.0.z = Fp::one().0;
         }
     }
 

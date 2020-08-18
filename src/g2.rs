@@ -652,68 +652,15 @@ impl groupy::CurveProjective for G2Projective {
     }
 
     fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
-        // Montgomery’s Trick and Fast Implementation of Masked AES
-        // Genelle, Prouff and Quisquater
-        // Section 3.2
+        for el in v {
+            let el = el.borrow_mut();
+            let mut out = blst_p2_affine::default();
 
-        // First pass: compute [a, ab, abc, ...]
-        let mut prod = Vec::with_capacity(v.len());
-        let mut tmp = Fp2::one();
-        for g in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            // Ignore normalized elements
-            .filter(|g| !g.is_normalized())
-        {
-            tmp *= &g.z();
-            prod.push(tmp);
-        }
+            unsafe { blst_p2_to_affine(&mut out, &el.0) };
 
-        // Invert `tmp`.
-        tmp = tmp.inverse().unwrap(); // Guaranteed to be nonzero.
-
-        // Second pass: iterate backwards to compute inverses
-        for (g, s) in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            // Backwards
-            .rev()
-            // Ignore normalized elements
-            .filter(|g| !g.is_normalized())
-            // Backwards, skip last element, fill in one for last term.
-            .zip(prod.into_iter().rev().skip(1).chain(Some(Fp2::one())))
-        {
-            // tmp := tmp * g.z; g.z := tmp * s = 1/z
-            let mut newtmp = tmp;
-            newtmp *= &g.z();
-            {
-                let mut x = tmp;
-                x *= &s;
-                g.0.z = s.0;
-            }
-            tmp = newtmp;
-        }
-
-        // Perform affine transformations
-        for g in v
-            .iter_mut()
-            .map(|g| g.borrow_mut())
-            .filter(|g| !g.is_normalized())
-        {
-            let mut z = g.z(); // 1/z
-            z.square(); // 1/z^2
-            {
-                let mut x = g.x();
-                x *= &z; // x/z^2
-                g.0.x = x.0;
-            }
-            z *= &g.z(); // 1/z^3
-            {
-                let mut y = g.y();
-                y *= &z; // y/z^3
-                g.0.y = y.0;
-            }
-            g.0.z = Fp2::one().0; // z = 1
+            el.0.x = out.x;
+            el.0.y = out.y;
+            el.0.z = Fp2::one().0;
         }
     }
 
@@ -870,7 +817,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn g2_curve_tests() {
+    fn groupy_g2_curve_tests() {
         use groupy::tests::curve_tests;
         curve_tests::<G2Projective>();
     }
