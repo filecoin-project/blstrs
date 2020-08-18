@@ -33,6 +33,18 @@ pub(crate) const NEGATIVE_ONE: Fp = Fp(blst_fp {
     ],
 });
 
+// B coefficient of BLS12-381 curve, 4.
+pub(crate) const B_COEFF: Fp = Fp(blst_fp {
+    l: [
+        0xaa270000000cfff3,
+        0x53cc0032fc34000a,
+        0x478fe97a6b0a807f,
+        0xb1d37ebee6ba24d7,
+        0x8ec9733bbf78ab2f,
+        0x9d645513d83de7e,
+    ],
+});
+
 // Coefficients for the Frobenius automorphism.
 pub(crate) const FROBENIUS_COEFF_FP2_C1: [Fp; 2] = [
     // Fp(-1)**(((q^0) - 1) / 2)

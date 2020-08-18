@@ -151,3 +151,41 @@ macro_rules! impl_binops_multiplicative {
         }
     };
 }
+
+macro_rules! encoded_point_delegations {
+    ($t:ident) => {
+        impl AsRef<[u8]> for $t {
+            fn as_ref(&self) -> &[u8] {
+                &self.0
+            }
+        }
+        impl AsMut<[u8]> for $t {
+            fn as_mut(&mut self) -> &mut [u8] {
+                &mut self.0
+            }
+        }
+
+        impl PartialEq for $t {
+            fn eq(&self, other: &$t) -> bool {
+                PartialEq::eq(&self.0[..], &other.0[..])
+            }
+        }
+        impl Eq for $t {}
+        impl PartialOrd for $t {
+            fn partial_cmp(&self, other: &$t) -> Option<::std::cmp::Ordering> {
+                PartialOrd::partial_cmp(&self.0[..], &other.0[..])
+            }
+        }
+        impl Ord for $t {
+            fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+                Ord::cmp(&self.0[..], &other.0[..])
+            }
+        }
+
+        impl ::std::hash::Hash for $t {
+            fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+                self.0[..].hash(state);
+            }
+        }
+    };
+} // encoded_point_delegations

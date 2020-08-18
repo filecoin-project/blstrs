@@ -19,7 +19,7 @@ pub struct Scalar(blst_fr);
 
 /// Representation of a `Scalar`, in regular coordinates.
 #[derive(Default, Clone, Copy)]
-pub struct ScalarRepr(blst_fr);
+pub struct ScalarRepr(pub(crate) blst_fr);
 
 impl AsRef<[u64]> for ScalarRepr {
     fn as_ref(&self) -> &[u64] {
