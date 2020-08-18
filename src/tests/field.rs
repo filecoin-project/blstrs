@@ -237,12 +237,12 @@ fn random_squaring_tests<F: Field, R: RngCore>(rng: &mut R) {
 fn random_inversion_tests<F: Field, R: RngCore>(rng: &mut R) {
     assert!(F::zero().inverse().is_none());
 
-    for _ in 0..10000 {
+    for i in 0..10000 {
         let mut a = F::random(rng);
         let b = a.inverse().unwrap(); // probablistically nonzero
         a.mul_assign(&b);
 
-        assert_eq!(a, F::one());
+        assert_eq!(a, F::one(), "round {}", i);
     }
 }
 

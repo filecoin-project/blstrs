@@ -347,8 +347,8 @@ impl fff::Field for Scalar {
             // Mask away the unused most-significant bits.
             raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
-            if let Ok(valid_el) = raw.try_into() {
-                return valid_el;
+            if ScalarRepr(raw) < MODULUS {
+                return Scalar(raw);
             }
         }
     }

@@ -1,11 +1,12 @@
 //! This module implements arithmetic over the quadratic extension field Fp12.
 
-use blst::*;
-
 use core::{
     fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
+use blst::*;
+use fff::Field;
 
 use crate::{Fp, Fp2, Fp6};
 
@@ -14,6 +15,15 @@ use crate::{Fp, Fp2, Fp6};
 pub struct Fp12(pub(crate) blst_fp12);
 
 impl fmt::Debug for Fp12 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Fp12")
+            .field("c0", &self.c0())
+            .field("c1", &self.c1())
+            .finish()
+    }
+}
+
+impl fmt::Display for Fp12 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + {:?}*u", self.c0(), self.c1())
     }

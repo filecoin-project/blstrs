@@ -19,7 +19,10 @@ pub struct Fp2(pub(crate) blst_fp2);
 
 impl fmt::Debug for Fp2 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} + {:?}*u", self.c0(), self.c1())
+        f.debug_struct("Fp2")
+            .field("c0", &self.c0())
+            .field("c1", &self.c1())
+            .finish()
     }
 }
 
@@ -131,10 +134,8 @@ impl_binops_multiplicative!(Fp2, Fp2);
 
 impl Fp2 {
     /// Constructs an element of `Fp2`.
-    pub fn new(c0: Fp, c1: Fp) -> Fp2 {
-        Fp2(blst_fp2 {
-            fp: [c0.into(), c1.into()],
-        })
+    pub const fn new(c0: Fp, c1: Fp) -> Fp2 {
+        Fp2(blst_fp2 { fp: [c0.0, c1.0] })
     }
 
     #[inline]
@@ -208,6 +209,16 @@ impl Fp2 {
 
     pub fn c1(&self) -> Fp {
         self.0.fp[1].into()
+    }
+
+    /// Multiply this element by the cubic and quadratic nonresidue 1 + u.
+    pub fn mul_by_nonresidue(&mut self) {
+        let t0 = self.c0();
+        let c0 = self.c0() - &self.c1();
+        let c1 = self.c1() + &t0;
+
+        self.0.fp[0] = c0.0;
+        self.0.fp[1] = c1.0;
     }
 
     /// Norm of Fq2 as extension field in i over Fq
@@ -1001,6 +1012,27 @@ mod tests {
         let mut m1 = Fp2::one();
         m1.negate();
         assert_eq!(QuadraticResidue, m1.legendre());
+        m1.mul_by_nonresidue();
+        assert_eq!(QuadraticNonResidue, m1.legendre());
+    }
+
+    #[test]
+    fn test_fp2_mul_nonresidue() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let nqr = Fp2::new(Fp::one(), Fp::one());
+
+        for _ in 0..1000 {
+            let mut a = Fp2::random(&mut rng);
+            let mut b = a;
+            a.mul_by_nonresidue();
+            b *= &nqr;
+
+            assert_eq!(a, b);
+        }
     }
 
     #[test]
