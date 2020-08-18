@@ -64,8 +64,16 @@ impl Neg for &G2Affine {
 
     #[inline]
     fn neg(self) -> G2Affine {
+        let mut res = *self;
+
         // Missing for affine in blst
-        todo!()
+        if !self.is_zero() {
+            let mut y = res.y();
+            y.negate();
+            res.0.y = y.0;
+        }
+
+        res
     }
 }
 
@@ -74,7 +82,7 @@ impl Neg for G2Affine {
 
     #[inline]
     fn neg(self) -> G2Affine {
-        -&self
+        (&self).neg()
     }
 }
 
@@ -211,7 +219,7 @@ impl G2Affine {
     /// Attempts to deserialize an uncompressed element.
     pub fn from_uncompressed(bytes: &[u8; 192]) -> Option<Self> {
         G2Affine::from_uncompressed_unchecked(bytes).and_then(|el| {
-            if el.is_torsion_free() && el.is_on_curve() {
+            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
                 Some(el)
             } else {
                 None
@@ -225,6 +233,10 @@ impl G2Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_uncompressed()` instead.
     pub fn from_uncompressed_unchecked(bytes: &[u8; 192]) -> Option<Self> {
+        if bytes.iter().all(|&b| b == 0) {
+            return Some(Self::zero());
+        }
+
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p2_affine::default();
@@ -239,7 +251,7 @@ impl G2Affine {
     /// Attempts to deserialize a compressed element.
     pub fn from_compressed(bytes: &[u8; 96]) -> Option<Self> {
         G2Affine::from_compressed_unchecked(bytes).and_then(|el| {
-            if el.is_torsion_free() && el.is_on_curve() {
+            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
                 Some(el)
             } else {
                 None
@@ -253,6 +265,10 @@ impl G2Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 96]) -> Option<Self> {
+        if bytes.iter().all(|&b| b == 0) {
+            return Some(Self::zero());
+        }
+
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut in_v = bytes.to_vec();
         let mut raw = blst_p2_affine::default();
@@ -305,19 +321,30 @@ impl G2Affine {
     fn scale_by_cofactor(&self) -> G2Projective {
         // G2 cofactor = (x^8 - 4 x^7 + 5 x^6) - (4 x^4 + 6 x^3 - 4 x^2 - 4 x + 13) // 9
         // 0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5
-        // G2Projective::from(self).multiply(&ScalarRepr(blst_fr {
-        //     l: [
-        //         0xcf1c38e31c7238e5,
-        //         0x1616ec6e786f0c70,
-        //         0x21537e293a6691ae,
-        //         0xa628f1cb4d9e82ef,
-        //         0xa68a205b2e5a7ddf,
-        //         0xcd91de4547085aba,
-        //         0x91d50792876a202,
-        //         0x5d543a95414e7f1,
-        //     ],
-        // }))
-        todo!()
+        let cofactor = fff::BitIterator::new([
+            0xcf1c38e31c7238e5,
+            0x1616ec6e786f0c70,
+            0x21537e293a6691ae,
+            0xa628f1cb4d9e82ef,
+            0xa68a205b2e5a7ddf,
+            0xcd91de4547085aba,
+            0x91d50792876a202,
+            0x5d543a95414e7f1,
+        ]);
+        self.mul_bits(cofactor)
+    }
+
+    fn mul_bits<S: AsRef<[u64]>>(&self, bits: fff::BitIterator<S>) -> G2Projective {
+        use groupy::CurveProjective;
+
+        let mut res = G2Projective::zero();
+        for i in bits {
+            res.double();
+            if i {
+                res.add_assign_mixed(self)
+            }
+        }
+        res
     }
 
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {
