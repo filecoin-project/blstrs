@@ -407,21 +407,15 @@ impl fff::Field for Fp {
     }
 
     fn inverse(&self) -> Option<Self> {
-        // Exponentiate by p - 2
-        let t = self.pow(&[
-            0xb9feffffffffaaa9,
-            0x1eabfffeb153ffff,
-            0x6730d2a0f6b0f624,
-            0x64774b84f38512bf,
-            0x4b1ba7b6434bacd7,
-            0x1a0111ea397fe69a,
-        ]);
-
-        if t.is_zero() {
-            None
-        } else {
-            Some(t)
+        if self.is_zero() {
+            return None;
         }
+
+        let mut out = blst_fp::default();
+
+        unsafe { blst_fp_eucl_inverse(&mut out, &self.0) };
+
+        Some(Fp(out))
     }
 
     fn frobenius_map(&mut self, _: usize) {
@@ -596,21 +590,6 @@ impl Fp {
         out.copy_from_slice(&out_v);
 
         out
-    }
-
-    /// Computes the multiplicative inverse of this field
-    /// element, returning None in the case that this element
-    /// is zero.
-    pub fn invert(&self) -> Option<Self> {
-        if self.is_zero() {
-            return None;
-        }
-
-        let mut out = blst_fp::default();
-
-        unsafe { blst_fp_eucl_inverse(&mut out, &self.0) };
-
-        Some(Fp(out))
     }
 
     /// Constructs an element of `Fp` without checking that it is canonical.

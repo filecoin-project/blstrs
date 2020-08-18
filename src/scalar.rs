@@ -358,7 +358,7 @@ impl fff::Field for Scalar {
     }
 
     fn one() -> Self {
-        Scalar(blst_fr { l: [1, 0, 0, 0] })
+        Scalar::from_raw([1, 0, 0, 0])
     }
 
     fn is_zero(&self) -> bool {
@@ -392,20 +392,108 @@ impl fff::Field for Scalar {
     }
 
     fn inverse(&self) -> Option<Self> {
-        // Exponentiate by p - 2
-        let t = self.pow(&[
-            0xb9feffffffffaaa9,
-            0x1eabfffeb153ffff,
-            0x6730d2a0f6b0f624,
-            0x64774b84f38512bf,
-            0x4b1ba7b6434bacd7,
-            0x1a0111ea397fe69a,
-        ]);
+        #[inline(always)]
+        fn square_assign_multi(n: &mut Scalar, num_times: usize) {
+            for _ in 0..num_times {
+                n.square();
+            }
+        }
+        // found using https://github.com/kwantam/addchain
+        let mut t0 = *self;
+        t0.square();
+        let mut t1 = t0 * self;
+        let mut t16 = t0;
+        t16.square();
+        let mut t6 = t16;
+        t6.square();
+        let mut t5 = t6 * t0;
+        t0 = t6 * t16;
+        let mut t12 = t5 * t16;
+        let mut t2 = t6;
+        t2.square();
+        let mut t7 = t5 * t6;
+        let mut t15 = t0 * t5;
+        let mut t17 = t12;
+        t17.square();
+        t1 *= t17;
+        let mut t3 = t7 * t2;
+        let t8 = t1 * t17;
+        let t4 = t8 * t2;
+        let t9 = t8 * t7;
+        t7 = t4 * t5;
+        let t11 = t4 * t17;
+        t5 = t9 * t17;
+        let t14 = t7 * t15;
+        let t13 = t11 * t12;
+        t12 = t11 * t17;
+        t15 *= &t12;
+        t16 *= &t15;
+        t3 *= &t16;
+        t17 *= &t3;
+        t0 *= &t17;
+        t6 *= &t0;
+        t2 *= &t6;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t17;
+        square_assign_multi(&mut t0, 9);
+        t0 *= &t16;
+        square_assign_multi(&mut t0, 9);
+        t0 *= &t15;
+        square_assign_multi(&mut t0, 9);
+        t0 *= &t15;
+        square_assign_multi(&mut t0, 7);
+        t0 *= &t14;
+        square_assign_multi(&mut t0, 7);
+        t0 *= &t13;
+        square_assign_multi(&mut t0, 10);
+        t0 *= &t12;
+        square_assign_multi(&mut t0, 9);
+        t0 *= &t11;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t8;
+        square_assign_multi(&mut t0, 8);
+        t0 *= self;
+        square_assign_multi(&mut t0, 14);
+        t0 *= &t9;
+        square_assign_multi(&mut t0, 10);
+        t0 *= &t8;
+        square_assign_multi(&mut t0, 15);
+        t0 *= &t7;
+        square_assign_multi(&mut t0, 10);
+        t0 *= &t6;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t5;
+        square_assign_multi(&mut t0, 16);
+        t0 *= &t3;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 7);
+        t0 *= &t4;
+        square_assign_multi(&mut t0, 9);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t3;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t3;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 8);
+        t0 *= &t2;
+        square_assign_multi(&mut t0, 5);
+        t0 *= &t1;
+        square_assign_multi(&mut t0, 5);
+        t0 *= &t1;
 
         if self.is_zero() {
             None
         } else {
-            Some(t)
+            Some(t0)
         }
     }
 
@@ -570,8 +658,7 @@ impl Scalar {
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Scalar` representation.
     pub fn from_raw(val: [u64; 4]) -> Self {
-        let mut original = blst_fr::default();
-        original.l.copy_from_slice(&val);
+        let original = blst_fr { l: val };
 
         let mut raw = blst_fr::default();
         // Convert to montgomery form
@@ -690,7 +777,7 @@ mod tests {
 
     /// q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
     fn MODULUS() -> Scalar {
-        Scalar::from_repr(Scalar::char()).unwrap()
+        Scalar(Scalar::char().0)
     }
 
     /// R = 2^256 mod q
@@ -1675,7 +1762,7 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        for _ in 0..1000 {
+        for i in 0..1000 {
             // Generate a, b, c and ensure (a + b) + c == a + (b + c).
             let a = Scalar::random(&mut rng);
             let b = Scalar::random(&mut rng);
@@ -1691,7 +1778,7 @@ mod tests {
 
             // assert!(tmp1.is_valid());
             // assert!(tmp2.is_valid());
-            assert_eq!(tmp1, tmp2);
+            assert_eq!(tmp1, tmp2, "round {}", i);
         }
     }
 
@@ -1936,6 +2023,8 @@ mod tests {
     #[test]
     fn test_scalar_inverse() {
         assert!(Scalar::zero().inverse().is_none());
+        assert_eq!(Scalar::one().inverse().unwrap(), Scalar::one());
+        assert_eq!((-&Scalar::one()).inverse().unwrap(), -&Scalar::one());
 
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
@@ -1944,12 +2033,12 @@ mod tests {
 
         let one = Scalar::one();
 
-        for _ in 0..1000 {
+        for i in 0..1000 {
             // Ensure that a * a^-1 = 1
             let mut a = Scalar::random(&mut rng);
             let ainv = a.inverse().unwrap();
             a.mul_assign(&ainv);
-            assert_eq!(a, one);
+            assert_eq!(a, one, "round {}", i);
         }
     }
 
