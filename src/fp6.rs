@@ -9,6 +9,8 @@ use core::{
 
 use crate::{Fp, Fp2};
 
+use fff::Field;
+
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
 #[derive(Copy, Clone)]
 pub struct Fp6(pub(crate) blst_fp6);

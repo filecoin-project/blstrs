@@ -7,7 +7,7 @@ use core::{
 };
 
 use blst::*;
-use fff::PrimeField;
+use fff::{Field, PrimeField};
 use rand_core::RngCore;
 
 use crate::{Fp2, Scalar};

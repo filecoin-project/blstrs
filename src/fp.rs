@@ -19,6 +19,44 @@ pub struct Fp(pub(crate) blst_fp);
 #[derive(Default, Clone, Copy)]
 pub struct FpRepr(blst_fp);
 
+// -((2**384) mod q) mod q
+pub(crate) const NEGATIVE_ONE: Fp = Fp(blst_fp {
+    l: [
+        0x43f5fffffffcaaae,
+        0x32b7fff2ed47fffd,
+        0x7e83a49a2e99d69,
+        0xeca8f3318332bb7a,
+        0xef148d1ea0f4c069,
+        0x40ab3263eff0206,
+    ],
+});
+
+// Coefficients for the Frobenius automorphism.
+pub(crate) const FROBENIUS_COEFF_FP2_C1: [Fp; 2] = [
+    // Fp(-1)**(((q^0) - 1) / 2)
+    Fp(blst_fp {
+        l: [
+            0x760900000002fffd,
+            0xebf4000bc40c0002,
+            0x5f48985753c758ba,
+            0x77ce585370525745,
+            0x5c071a97a256ec6d,
+            0x15f65ec3fa80e493,
+        ],
+    }),
+    // Fp(-1)**(((q^1) - 1) / 2)
+    Fp(blst_fp {
+        l: [
+            0x43f5fffffffcaaae,
+            0x32b7fff2ed47fffd,
+            0x7e83a49a2e99d69,
+            0xeca8f3318332bb7a,
+            0xef148d1ea0f4c069,
+            0x40ab3263eff0206,
+        ],
+    }),
+];
+
 impl AsRef<[u64]> for FpRepr {
     fn as_ref(&self) -> &[u64] {
         &self.0.l
@@ -493,7 +531,23 @@ impl fff::PrimeField for Fp {
 
 impl fff::SqrtField for Fp {
     fn legendre(&self) -> fff::LegendreSymbol {
-        todo!()
+        const MOD_MINUS_1_OVER_2: [u64; 6] = [
+            15924587544893707605,
+            1105070755758604287,
+            12941209323636816658,
+            12843041017062132063,
+            2706051889235351147,
+            936899308823769933,
+        ];
+        // s = self^((modulus - 1) // 2)
+        let s = self.pow(MOD_MINUS_1_OVER_2);
+        if s == Self::zero() {
+            ::fff::LegendreSymbol::Zero
+        } else if s == Self::one() {
+            ::fff::LegendreSymbol::QuadraticResidue
+        } else {
+            ::fff::LegendreSymbol::QuadraticNonResidue
+        }
     }
 
     fn sqrt(&self) -> Option<Self> {
