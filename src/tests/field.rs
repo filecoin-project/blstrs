@@ -33,7 +33,7 @@ pub fn random_sqrt_tests<F: SqrtField>() {
         let a = F::random(&mut rng);
         let mut b = a;
         b.square();
-        // assert_eq!(b.legendre(), LegendreSymbol::QuadraticResidue);
+        assert_eq!(b.legendre(), LegendreSymbol::QuadraticResidue);
 
         let b = b.sqrt().unwrap();
         let mut negb = b;
@@ -46,7 +46,7 @@ pub fn random_sqrt_tests<F: SqrtField>() {
     for _ in 0..10000 {
         let mut b = c;
         b.square();
-        // assert_eq!(b.legendre(), LegendreSymbol::QuadraticResidue);
+        assert_eq!(b.legendre(), LegendreSymbol::QuadraticResidue);
 
         b = b.sqrt().unwrap();
 
