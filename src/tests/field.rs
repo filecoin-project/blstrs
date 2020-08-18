@@ -208,7 +208,7 @@ fn random_negation_tests<F: Field, R: RngCore>(rng: &mut R) {
         b.negate();
         b.add_assign(&a);
 
-        assert!(b.is_zero());
+        assert!(b.is_zero(), "negation");
     }
 }
 
@@ -219,7 +219,7 @@ fn random_doubling_tests<F: Field, R: RngCore>(rng: &mut R) {
         a.add_assign(&b);
         b.double();
 
-        assert_eq!(a, b);
+        assert_eq!(a, b, "doubling");
     }
 }
 
@@ -230,7 +230,7 @@ fn random_squaring_tests<F: Field, R: RngCore>(rng: &mut R) {
         a.mul_assign(&b);
         b.square();
 
-        assert_eq!(a, b);
+        assert_eq!(a, b, "squaring");
     }
 }
 
@@ -242,7 +242,7 @@ fn random_inversion_tests<F: Field, R: RngCore>(rng: &mut R) {
         let b = a.inverse().unwrap(); // probablistically nonzero
         a.mul_assign(&b);
 
-        assert_eq!(a, F::one(), "round {}", i);
+        assert_eq!(a, F::one(), "inversion round {}", i);
     }
 }
 

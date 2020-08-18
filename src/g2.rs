@@ -734,7 +734,7 @@ impl groupy::CurveProjective for G2Projective {
     }
 
     fn negate(&mut self) {
-        self.neg();
+        *self = self.neg();
     }
 
     fn mul_assign<S: Into<<Self::Scalar as PrimeField>::Repr>>(&mut self, other: S) {

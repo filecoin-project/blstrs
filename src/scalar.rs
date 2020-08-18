@@ -8,7 +8,7 @@ use core::{
 };
 
 use blst::*;
-use fff::{Field, PrimeField};
+use fff::{Field, PrimeField, PrimeFieldRepr};
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
 /// curve construction.
@@ -42,6 +42,26 @@ const MODULUS: ScalarRepr = ScalarRepr(blst_fr {
         0x53bda402fffe5bfe,
         0x3339d80809a1d805,
         0x73eda753299d7d48,
+    ],
+});
+
+/// R = 2^256 mod q
+const R: Scalar = Scalar(blst_fr {
+    l: [
+        0x00000001fffffffe,
+        0x5884b7fa00034802,
+        0x998c4fefecbc4ff5,
+        0x1824b159acc5056f,
+    ],
+});
+
+/// R^2 = 2^512 mod q
+const R2: Scalar = Scalar(blst_fr {
+    l: [
+        0xc999e990f3f29c6d,
+        0x2b6cedcb87925c23,
+        0x05d314967254398f,
+        0x0748d9d99f59ff11,
     ],
 });
 
@@ -216,24 +236,13 @@ pub const S: u32 = 32;
 
 impl fmt::Debug for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let tmp = self.to_bytes_le();
-        write!(f, "0x")?;
-        for &b in tmp.iter().rev() {
-            write!(f, "{:02x}", b)?;
-        }
-        Ok(())
+        write!(f, "Scalar({:?})", self.into_repr())
     }
 }
 
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let tmp = self.to_bytes_le();
-        write!(f, "Scalar(0x")?;
-        for &b in tmp.iter().rev() {
-            write!(f, "{:02x}", b)?;
-        }
-        write!(f, ")")?;
-        Ok(())
+        write!(f, "Scalar({})", self.into_repr())
     }
 }
 
@@ -354,11 +363,11 @@ impl fff::Field for Scalar {
     }
 
     fn zero() -> Self {
-        Scalar(blst_fr { l: [0, 0, 0, 0] })
+        Scalar(blst_fr::default())
     }
 
     fn one() -> Self {
-        Scalar::from_raw([1, 0, 0, 0])
+        R
     }
 
     fn is_zero(&self) -> bool {
@@ -392,108 +401,64 @@ impl fff::Field for Scalar {
     }
 
     fn inverse(&self) -> Option<Self> {
-        #[inline(always)]
-        fn square_assign_multi(n: &mut Scalar, num_times: usize) {
-            for _ in 0..num_times {
-                n.square();
-            }
-        }
-        // found using https://github.com/kwantam/addchain
-        let mut t0 = *self;
-        t0.square();
-        let mut t1 = t0 * self;
-        let mut t16 = t0;
-        t16.square();
-        let mut t6 = t16;
-        t6.square();
-        let mut t5 = t6 * t0;
-        t0 = t6 * t16;
-        let mut t12 = t5 * t16;
-        let mut t2 = t6;
-        t2.square();
-        let mut t7 = t5 * t6;
-        let mut t15 = t0 * t5;
-        let mut t17 = t12;
-        t17.square();
-        t1 *= t17;
-        let mut t3 = t7 * t2;
-        let t8 = t1 * t17;
-        let t4 = t8 * t2;
-        let t9 = t8 * t7;
-        t7 = t4 * t5;
-        let t11 = t4 * t17;
-        t5 = t9 * t17;
-        let t14 = t7 * t15;
-        let t13 = t11 * t12;
-        t12 = t11 * t17;
-        t15 *= &t12;
-        t16 *= &t15;
-        t3 *= &t16;
-        t17 *= &t3;
-        t0 *= &t17;
-        t6 *= &t0;
-        t2 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t17;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t16;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t14;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t13;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t12;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t11;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 8);
-        t0 *= self;
-        square_assign_multi(&mut t0, 14);
-        t0 *= &t9;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 15);
-        t0 *= &t7;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t5;
-        square_assign_multi(&mut t0, 16);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t4;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
-
         if self.is_zero() {
             None
         } else {
-            Some(t0)
+            // Guajardo Kumar Paar Pelzl
+            // Efficient Software-Implementation of Finite Fields with Applications to Cryptography
+            // Algorithm 16 (BEA for Inversion in Fp)
+
+            let one = ScalarRepr::from(1);
+
+            let mut u = self.into_repr();
+            let mut v = MODULUS;
+            let mut b = ScalarRepr(R2.0); // Avoids unnecessary reduction step.
+            let mut c = Self::zero().into_repr();
+
+            let mut bs = R2;
+            let mut cs = Scalar(c.0);
+
+            while u != one && v != one {
+                while u.is_even() {
+                    u.div2();
+
+                    if b.is_even() {
+                        b.div2();
+                    } else {
+                        b.add_nocarry(&MODULUS);
+                        b.div2();
+                    }
+                }
+
+                while v.is_even() {
+                    v.div2();
+
+                    if c.is_even() {
+                        c.div2();
+                    } else {
+                        c.add_nocarry(&MODULUS);
+                        c.div2();
+                    }
+                }
+
+                bs.0 = b.0;
+                cs.0 = c.0;
+                if v < u {
+                    u.sub_noborrow(&v);
+                    bs -= &cs;
+                } else {
+                    v.sub_noborrow(&u);
+                    cs -= &bs;
+                }
+                b = ScalarRepr(bs.0);
+                c = ScalarRepr(cs.0);
+            }
+
+            if u == one {
+                Some(bs)
+            } else {
+                Some(cs)
+            }
         }
     }
 
@@ -542,61 +507,84 @@ impl fff::PrimeField for Scalar {
     }
 
     fn root_of_unity() -> Self {
-        Scalar::from_repr(ScalarRepr::new([
-            0xb9b58d8c5f0e466a,
-            0x5b1b4c801819d7ec,
-            0x0af53ae352a31e64,
-            0x5bf3adda19e9b27b,
-        ]))
-        .unwrap()
+        Scalar(blst_fr {
+            l: [
+                0xb9b58d8c5f0e466a,
+                0x5b1b4c801819d7ec,
+                0x0af53ae352a31e64,
+                0x5bf3adda19e9b27b,
+            ],
+        })
     }
 }
 
 impl fff::SqrtField for Scalar {
     fn legendre(&self) -> fff::LegendreSymbol {
-        fff::LegendreSymbol::QuadraticResidue
+        const MOD_MINUS_1_OVER_2: [u64; 4] = [
+            0x7fffffff80000000,
+            0xa9ded2017fff2dff,
+            0x199cec0404d0ec02,
+            0x39f6d3a994cebea4,
+        ];
+        // s = self^((modulus - 1) // 2)
+        let s = self.pow(MOD_MINUS_1_OVER_2);
+        if s == Self::zero() {
+            fff::LegendreSymbol::Zero
+        } else if s == Self::one() {
+            fff::LegendreSymbol::QuadraticResidue
+        } else {
+            fff::LegendreSymbol::QuadraticNonResidue
+        }
     }
 
     fn sqrt(&self) -> Option<Self> {
-        let mut c = Self::root_of_unity();
-        let mut r = self.pow([
-            9223141137265459200,
-            347036667491570177,
-            10722717374829358084,
-            972477353,
-        ]);
-        let mut t = self.pow([
-            18446282274530918399,
-            694073334983140354,
-            2998690675949164552,
-            1944954707,
-        ]);
-        let mut m = S;
+        // Tonelli-Shank's algorithm for q mod 16 = 1
+        // https://eprint.iacr.org/2012/685.pdf (page 12, algorithm 5)
+        match self.legendre() {
+            fff::LegendreSymbol::Zero => Some(*self),
+            fff::LegendreSymbol::QuadraticNonResidue => None,
+            fff::LegendreSymbol::QuadraticResidue => {
+                let mut c = Self::root_of_unity();
+                let mut r = self.pow([
+                    9223141137265459200,
+                    347036667491570177,
+                    10722717374829358084,
+                    972477353,
+                ]);
+                let mut t = self.pow([
+                    18446282274530918399,
+                    694073334983140354,
+                    2998690675949164552,
+                    1944954707,
+                ]);
+                let mut m = S;
 
-        while t != Self::one() {
-            let mut i = 1;
-            {
-                let mut t2i = t;
-                t2i.square();
-                loop {
-                    if t2i == Self::one() {
-                        break;
+                while t != Self::one() {
+                    let mut i = 1;
+                    {
+                        let mut t2i = t;
+                        t2i.square();
+                        loop {
+                            if t2i == Self::one() {
+                                break;
+                            }
+                            t2i.square();
+                            i += 1;
+                        }
                     }
-                    t2i.square();
-                    i += 1;
+
+                    for _ in 0..(m - i - 1) {
+                        c.square();
+                    }
+                    r *= &c;
+                    c.square();
+                    t *= &c;
+                    m = i;
                 }
-            }
 
-            for _ in 0..(m - i - 1) {
-                c.square();
+                Some(r)
             }
-            r *= &c;
-            c.square();
-            t *= &c;
-            m = i;
         }
-
-        Some(r)
     }
 }
 
@@ -622,7 +610,11 @@ impl TryInto<Scalar> for blst_scalar {
         // Safe because valid fr check was just made above.
         let fr: blst_fr = unsafe { std::mem::transmute(self) };
 
-        Ok(Scalar(fr))
+        let mut out = blst_fr::default();
+        // convert to montgomery
+        unsafe { blst_fr_to(&mut out, &fr) }
+
+        Ok(Scalar(out))
     }
 }
 
@@ -661,6 +653,7 @@ impl Scalar {
         let original = blst_fr { l: val };
 
         let mut raw = blst_fr::default();
+
         // Convert to montgomery form
         unsafe { blst_fr_to(&mut raw, &original) }
 
@@ -672,8 +665,15 @@ impl Scalar {
     pub fn to_bytes_le(&self) -> [u8; 32] {
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut out_v = vec![0u8; 32];
+
+        let mut out = blst_fr::default();
+        unsafe {
+            // transform out of montgomery
+            blst_fr_from(&mut out, &self.0);
+        }
+
         // Safe because any valid blst_fr is also a valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(self.0) };
+        let scalar: blst_scalar = unsafe { std::mem::transmute(out) };
 
         unsafe {
             blst_lendian_from_scalar(out_v.as_mut_ptr(), &scalar);
@@ -690,8 +690,15 @@ impl Scalar {
     pub fn to_bytes_be(&self) -> [u8; 32] {
         // TODO: figure out if there is a way to avoid this heap allocation
         let mut out_v = vec![0u8; 32];
+
+        let mut out = blst_fr::default();
+        unsafe {
+            // transform out of montgomery
+            blst_fr_from(&mut out, &self.0);
+        }
+
         // Safe because any valid blst_fr is also a valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(self.0) };
+        let scalar: blst_scalar = unsafe { std::mem::transmute(out) };
         unsafe {
             blst_bendian_from_scalar(out_v.as_mut_ptr(), &scalar);
         }
@@ -766,7 +773,7 @@ impl Scalar {
 
 #[cfg(test)]
 mod tests {
-    use super::{Scalar, ScalarRepr};
+    use super::{Scalar, ScalarRepr, R2};
 
     use fff::{Field, PrimeField, PrimeFieldRepr, SqrtField};
     use rand_core::SeedableRng;
@@ -788,19 +795,6 @@ mod tests {
                 0x5884b7fa00034802,
                 0x998c4fefecbc4ff5,
                 0x1824b159acc5056f,
-            ])
-            .0,
-        )
-    }
-
-    /// R^2 = 2^512 mod q
-    fn R2() -> Scalar {
-        Scalar(
-            ScalarRepr::new([
-                0xc999e990f3f29c6d,
-                0x2b6cedcb87925c23,
-                0x05d314967254398f,
-                0x0748d9d99f59ff11,
             ])
             .0,
         )
@@ -837,15 +831,15 @@ mod tests {
     fn test_debug() {
         assert_eq!(
             format!("{:?}", Scalar::zero()),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "Scalar(0x0000000000000000000000000000000000000000000000000000000000000000)"
         );
         assert_eq!(
             format!("{:?}", Scalar::one()),
-            "0x0000000000000000000000000000000000000000000000000000000000000001"
+            "Scalar(0x0000000000000000000000000000000000000000000000000000000000000001)"
         );
         assert_eq!(
-            format!("{:?}", R()),
-            "0x1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffffe"
+            format!("{:?}", R2),
+            "Scalar(0x1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffffe)"
         );
     }
 
@@ -853,10 +847,10 @@ mod tests {
     fn test_equality() {
         assert_eq!(Scalar::zero(), Scalar::zero());
         assert_eq!(Scalar::one(), Scalar::one());
-        assert_eq!(R2(), R2());
+        assert_eq!(Scalar(R2.0), Scalar(R2.0));
 
         assert!(Scalar::zero() != Scalar::one());
-        assert!(Scalar::one() != R2());
+        assert!(Scalar::one() != Scalar(R2.0));
     }
 
     #[test]
@@ -1112,69 +1106,6 @@ mod tests {
             a += &c;
 
             assert_eq!(tmp1, a);
-        }
-    }
-
-    #[test]
-    fn test_squaring() {
-        let mut a = Scalar(
-            ScalarRepr::new([
-                0xffffffffffffffff,
-                0xffffffffffffffff,
-                0xffffffffffffffff,
-                0x73eda753299d7d47,
-            ])
-            .0,
-        );
-        // assert!(a.is_valid());
-        a.square();
-        assert_eq!(
-            a,
-            Scalar(
-                ScalarRepr::new([
-                    0xc0d698e7bde077b8,
-                    0xb79a310579e76ec2,
-                    0xac1da8d0a9af4e5f,
-                    0x13f629c49bf23e97
-                ])
-                .0
-            )
-        );
-
-        let mut rng = XorShiftRng::from_seed([
-            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
-            0xbc, 0xe5,
-        ]);
-
-        for _ in 0..1000000 {
-            // Ensure that (a * a) = a^2
-            let a = Scalar::random(&mut rng);
-
-            let mut tmp = a;
-            tmp.square();
-
-            let mut tmp2 = a;
-            tmp2 *= &a;
-
-            assert_eq!(tmp, tmp2);
-        }
-    }
-
-    #[test]
-    fn test_inversion() {
-        assert!(Scalar::zero().inverse().is_none());
-        assert_eq!(Scalar::one().inverse().unwrap(), Scalar::one());
-        assert_eq!((-&Scalar::one()).inverse().unwrap(), -&Scalar::one());
-
-        let mut tmp = R2();
-
-        for _ in 0..100 {
-            let mut tmp2 = tmp.inverse().unwrap();
-            tmp2 *= &tmp;
-
-            assert_eq!(tmp2, Scalar::one());
-
-            tmp += &R2();
         }
     }
 
@@ -2023,14 +1954,13 @@ mod tests {
     #[test]
     fn test_scalar_inverse() {
         assert!(Scalar::zero().inverse().is_none());
-        assert_eq!(Scalar::one().inverse().unwrap(), Scalar::one());
-        assert_eq!((-&Scalar::one()).inverse().unwrap(), -&Scalar::one());
 
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
         ]);
 
+        use fff::PrimeField;
         let one = Scalar::one();
 
         for i in 0..1000 {
@@ -2254,15 +2184,13 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                Scalar(
-                    ScalarRepr::new([
-                        0xc3cae746a3b5ecc7,
-                        0x185ec8eb3f5b5aee,
-                        0x684499ffe4b9dd99,
-                        0x7c9bba7afb68faa
-                    ])
-                    .0
-                )
+                Scalar::from_repr(ScalarRepr::new([
+                    0xc3cae746a3b5ecc7,
+                    0x185ec8eb3f5b5aee,
+                    0x684499ffe4b9dd99,
+                    0x7c9bba7afb68faa
+                ]))
+                .unwrap()
             ),
             "Scalar(0x07c9bba7afb68faa684499ffe4b9dd99185ec8eb3f5b5aeec3cae746a3b5ecc7)"
                 .to_string()
@@ -2270,15 +2198,13 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                Scalar(
-                    ScalarRepr::new([
-                        0x44c71298ff198106,
-                        0xb0ad10817df79b6a,
-                        0xd034a80a2b74132b,
-                        0x41cf9a1336f50719
-                    ])
-                    .0
-                )
+                Scalar::from_repr(ScalarRepr::new([
+                    0x44c71298ff198106,
+                    0xb0ad10817df79b6a,
+                    0xd034a80a2b74132b,
+                    0x41cf9a1336f50719
+                ]))
+                .unwrap()
             ),
             "Scalar(0x41cf9a1336f50719d034a80a2b74132bb0ad10817df79b6a44c71298ff198106)"
                 .to_string()
@@ -2314,7 +2240,7 @@ mod tests {
     }
 
     #[test]
-    fn fr_field_tests() {
+    fn scalar_field_tests() {
         crate::tests::field::random_field_tests::<Scalar>();
         crate::tests::field::random_sqrt_tests::<Scalar>();
         crate::tests::field::random_frobenius_tests::<Scalar, _>(Scalar::char(), 13);
@@ -2322,7 +2248,7 @@ mod tests {
     }
 
     #[test]
-    fn fr_repr_tests() {
+    fn scalar_repr_tests() {
         crate::tests::repr::random_repr_tests::<Scalar>();
     }
 
