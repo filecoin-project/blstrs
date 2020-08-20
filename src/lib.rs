@@ -58,15 +58,23 @@ impl Engine for Bls12 {
             ),
         >,
     {
-        let mut ret = blst::blst_fp12::default();
-        for (p, q) in i.into_iter() {
+        let mut res = blst::blst_fp12::default();
+
+        for (i, (p, q)) in i.into_iter().enumerate() {
             let mut tmp = blst::blst_fp12::default();
             unsafe {
                 blst::blst_miller_loop_lines(&mut tmp, q.0.as_ptr(), &p.0);
-                blst::blst_fp12_mul(&mut ret, &ret, &tmp);
+            }
+            if i == 0 {
+                res = tmp;
+            } else {
+                unsafe {
+                    blst::blst_fp12_mul(&mut res, &res, &tmp);
+                }
             }
         }
-        ret.into()
+
+        Fp12(res)
     }
 
     fn final_exponentiation(r: &Fp12) -> Option<Fp12> {
