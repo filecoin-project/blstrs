@@ -70,18 +70,17 @@ impl Eq for Fp12 {}
 impl PartialEq for Fp12 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.0.fp6[0].fp2[0].fp[0].l == other.0.fp6[0].fp2[0].fp[0].l
-            && self.0.fp6[0].fp2[0].fp[1].l == other.0.fp6[0].fp2[0].fp[1].l
-            && self.0.fp6[0].fp2[1].fp[0].l == other.0.fp6[0].fp2[1].fp[0].l
-            && self.0.fp6[0].fp2[1].fp[1].l == other.0.fp6[0].fp2[1].fp[1].l
-            && self.0.fp6[0].fp2[2].fp[0].l == other.0.fp6[0].fp2[2].fp[0].l
-            && self.0.fp6[0].fp2[2].fp[1].l == other.0.fp6[0].fp2[2].fp[1].l
-            && self.0.fp6[1].fp2[0].fp[0].l == other.0.fp6[1].fp2[0].fp[0].l
-            && self.0.fp6[1].fp2[0].fp[1].l == other.0.fp6[1].fp2[0].fp[1].l
-            && self.0.fp6[1].fp2[1].fp[0].l == other.0.fp6[1].fp2[1].fp[0].l
-            && self.0.fp6[1].fp2[1].fp[1].l == other.0.fp6[1].fp2[1].fp[1].l
-            && self.0.fp6[1].fp2[2].fp[0].l == other.0.fp6[1].fp2[2].fp[0].l
-            && self.0.fp6[1].fp2[2].fp[1].l == other.0.fp6[1].fp2[2].fp[1].l
+        for (a, b) in self.0.fp6.iter().zip(other.0.fp6.iter()) {
+            for (a, b) in a.fp2.iter().zip(b.fp2.iter()) {
+                for (a, b) in a.fp.iter().zip(b.fp.iter()) {
+                    if &a.l != &b.l {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
     }
 }
 
@@ -551,7 +550,14 @@ impl Field for Fp12 {
 mod tests {
     use super::Fp12;
 
-    use fff::PrimeField;
+    use fff::{Field, PrimeField};
+
+    #[test]
+    fn test_fp12_eq() {
+        assert_eq!(Fp12::one(), Fp12::one());
+        assert_eq!(Fp12::zero(), Fp12::zero());
+        assert_ne!(Fp12::zero(), Fp12::one());
+    }
 
     #[test]
     fn fp12_random_frobenius_tests() {
