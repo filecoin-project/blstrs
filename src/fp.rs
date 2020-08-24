@@ -18,7 +18,7 @@ pub struct Fp(pub(crate) blst_fp);
 
 /// Representation of a `Fp`, in regular coordinates.
 #[derive(Default, Clone, Copy)]
-pub struct FpRepr(blst_fp);
+pub struct FpRepr([u64; 6]);
 
 // -((2**384) mod q) mod q
 pub(crate) const NEGATIVE_ONE: Fp = Fp(blst_fp {
@@ -258,13 +258,13 @@ pub const FROBENIUS_COEFF_FP6_C2: [Fp2; 6] = [
 
 impl AsRef<[u64]> for FpRepr {
     fn as_ref(&self) -> &[u64] {
-        &self.0.l
+        &self.0
     }
 }
 
 impl AsMut<[u64]> for FpRepr {
     fn as_mut(&mut self) -> &mut [u64] {
-        &mut self.0.l
+        &mut self.0
     }
 }
 
@@ -274,7 +274,7 @@ const LIMB_BITS: usize = 64;
 impl fmt::Debug for FpRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x")?;
-        for &b in self.0.l.iter().rev() {
+        for &b in self.0.iter().rev() {
             write!(f, "{:016x}", b)?;
         }
         Ok(())
@@ -284,7 +284,7 @@ impl fmt::Debug for FpRepr {
 impl fmt::Display for FpRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x")?;
-        for &b in self.0.l.iter().rev() {
+        for &b in self.0.iter().rev() {
             write!(f, "{:016x}", b)?;
         }
         Ok(())
@@ -293,23 +293,19 @@ impl fmt::Display for FpRepr {
 
 impl From<u64> for FpRepr {
     fn from(val: u64) -> FpRepr {
-        FpRepr(blst_fp {
-            l: [val, 0, 0, 0, 0, 0],
-        })
+        FpRepr([val, 0, 0, 0, 0, 0])
     }
 }
 
 impl From<u64> for Fp {
     fn from(val: u64) -> Fp {
-        let mut out = blst_fp::default();
-        unsafe { blst_fp_from_uint64(&mut out, &val) };
-        Fp(out)
+        Fp::from_repr(FpRepr::from(val)).expect("single u64 is always less than the modulus")
     }
 }
 
 impl Ord for FpRepr {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        for (a, b) in self.0.l.iter().rev().zip(other.0.l.iter().rev()) {
+        for (a, b) in self.0.iter().rev().zip(other.0.iter().rev()) {
             match a.cmp(b) {
                 cmp::Ordering::Greater => {
                     return cmp::Ordering::Greater;
@@ -334,7 +330,7 @@ impl PartialOrd for FpRepr {
 impl PartialEq for FpRepr {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.0.l == other.0.l
+        self.0 == other.0
     }
 }
 impl Eq for FpRepr {}
@@ -343,7 +339,7 @@ impl fff::PrimeFieldRepr for FpRepr {
     fn sub_noborrow(&mut self, other: &Self) {
         let mut borrow = 0;
 
-        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+        for (a, b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = fff::sbb(*a, *b, &mut borrow);
         }
     }
@@ -351,14 +347,14 @@ impl fff::PrimeFieldRepr for FpRepr {
     fn add_nocarry(&mut self, other: &Self) {
         let mut carry = 0;
 
-        for (a, b) in self.0.l.iter_mut().zip(other.0.l.iter()) {
+        for (a, b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = fff::adc(*a, *b, &mut carry);
         }
     }
 
     fn num_bits(&self) -> u32 {
         let mut ret = (LIMBS as u32) * LIMB_BITS as u32;
-        for i in self.0.l.iter().rev() {
+        for i in self.0.iter().rev() {
             let leading = i.leading_zeros();
             ret -= leading;
             if leading != LIMB_BITS as u32 {
@@ -370,11 +366,11 @@ impl fff::PrimeFieldRepr for FpRepr {
     }
 
     fn is_zero(&self) -> bool {
-        self.0.l.iter().all(|&e| e == 0)
+        self.0.iter().all(|&e| e == 0)
     }
 
     fn is_odd(&self) -> bool {
-        self.0.l[0] & 1 == 1
+        self.0[0] & 1 == 1
     }
 
     fn is_even(&self) -> bool {
@@ -383,7 +379,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
     fn div2(&mut self) {
         let mut t = 0;
-        for i in self.0.l.iter_mut().rev() {
+        for i in self.0.iter_mut().rev() {
             let t2 = *i << 63;
             *i >>= 1;
             *i |= t;
@@ -399,7 +395,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
-            for i in self.0.l.iter_mut().rev() {
+            for i in self.0.iter_mut().rev() {
                 mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
@@ -407,7 +403,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
         if n > 0 {
             let mut t = 0;
-            for i in self.0.l.iter_mut().rev() {
+            for i in self.0.iter_mut().rev() {
                 let t2 = *i << (LIMB_BITS as u32 - n);
                 *i >>= n;
                 *i |= t;
@@ -418,7 +414,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
     fn mul2(&mut self) {
         let mut last = 0;
-        for i in &mut self.0.l {
+        for i in &mut self.0 {
             let tmp = *i >> 63;
             *i <<= 1;
             *i |= last;
@@ -434,7 +430,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
         while n >= LIMB_BITS as u32 {
             let mut t = 0;
-            for i in &mut self.0.l {
+            for i in &mut self.0 {
                 mem::swap(&mut t, i);
             }
             n -= LIMB_BITS as u32;
@@ -442,7 +438,7 @@ impl fff::PrimeFieldRepr for FpRepr {
 
         if n > 0 {
             let mut t = 0;
-            for i in &mut self.0.l {
+            for i in &mut self.0 {
                 let t2 = *i >> (LIMB_BITS as u32 - n);
                 *i <<= n;
                 *i |= t;
@@ -492,9 +488,9 @@ impl fmt::Display for Fp {
 
 impl From<Fp> for FpRepr {
     fn from(val: Fp) -> Self {
-        let mut out = blst_fp::default();
-        unsafe { blst_fp_from(&mut out, &val.0) };
-        FpRepr(out)
+        let mut out = FpRepr::default();
+        unsafe { blst_uint64_from_fp(out.0.as_mut_ptr(), &val.0) };
+        out
     }
 }
 
@@ -592,7 +588,7 @@ impl fff::Field for Fp {
             // Mask away the unused most-significant bits.
             raw.l[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
-            if FpRepr(raw) < MODULUS {
+            if FpRepr(raw.l) < MODULUS {
                 return Fp(raw);
             }
         }
@@ -664,20 +660,18 @@ impl fff::Field for Fp {
     }
 }
 
-const MODULUS: FpRepr = FpRepr(blst_fp {
-    l: [
-        0xb9feffffffffaaab,
-        0x1eabfffeb153ffff,
-        0x6730d2a0f6b0f624,
-        0x64774b84f38512bf,
-        0x4b1ba7b6434bacd7,
-        0x1a0111ea397fe69a,
-    ],
-});
+const MODULUS: FpRepr = FpRepr([
+    0xb9feffffffffaaab,
+    0x1eabfffeb153ffff,
+    0x6730d2a0f6b0f624,
+    0x64774b84f38512bf,
+    0x4b1ba7b6434bacd7,
+    0x1a0111ea397fe69a,
+]);
 
 impl FpRepr {
     pub const fn new(raw: [u64; 6]) -> Self {
-        FpRepr(blst_fp { l: raw })
+        FpRepr(raw)
     }
 }
 
@@ -691,7 +685,7 @@ impl fff::PrimeField for Fp {
     fn from_repr(repr: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
         if FpRepr(repr.0) < MODULUS {
             let mut out = blst_fp::default();
-            unsafe { blst_fp_to(&mut out, &repr.0) }
+            unsafe { blst_fp_from_uint64(&mut out, repr.0.as_ptr()) }
             Ok(Fp(out))
         } else {
             Err(fff::PrimeFieldDecodingError::NotInField(
@@ -711,23 +705,18 @@ impl fff::PrimeField for Fp {
     }
 
     fn multiplicative_generator() -> Self {
-        Fp::from_repr(FpRepr(blst_fp {
-            l: [2, 0, 0, 0, 0, 0],
-        }))
-        .unwrap()
+        Fp::from_repr(FpRepr([2, 0, 0, 0, 0, 0])).unwrap()
     }
 
     fn root_of_unity() -> Self {
-        Fp::from_repr(FpRepr(blst_fp {
-            l: [
-                13402431016077863594,
-                2210141511517208575,
-                7435674573564081700,
-                7239337960414712511,
-                5412103778470702295,
-                1873798617647539866,
-            ],
-        }))
+        Fp::from_repr(FpRepr([
+            13402431016077863594,
+            2210141511517208575,
+            7435674573564081700,
+            7239337960414712511,
+            5412103778470702295,
+            1873798617647539866,
+        ]))
         .unwrap()
     }
 }
@@ -931,15 +920,16 @@ mod tests {
         o.negate();
 
         assert_eq!(
-            Fp(FpRepr::new([
-                0x43f5fffffffcaaae,
-                0x32b7fff2ed47fffd,
-                0x7e83a49a2e99d69,
-                0xeca8f3318332bb7a,
-                0xef148d1ea0f4c069,
-                0x40ab3263eff0206,
-            ])
-            .0),
+            Fp(blst::blst_fp {
+                l: [
+                    0x43f5fffffffcaaae,
+                    0x32b7fff2ed47fffd,
+                    0x7e83a49a2e99d69,
+                    0xeca8f3318332bb7a,
+                    0xef148d1ea0f4c069,
+                    0x40ab3263eff0206,
+                ]
+            }),
             o
         );
     }
@@ -1208,7 +1198,7 @@ mod tests {
 
         for _ in 0..1000 {
             let mut a = Fp::random(&mut rng).into_repr();
-            a.0.l[5] >>= 30;
+            a.0[5] >>= 30;
             let mut b = a;
             for _ in 0..10 {
                 b.mul2();
@@ -1303,9 +1293,9 @@ mod tests {
             let mut c = Fp::random(&mut rng).into_repr();
 
             // Unset the first few bits, so that overflow won't occur.
-            a.0.l[5] >>= 3;
-            b.0.l[5] >>= 3;
-            c.0.l[5] >>= 3;
+            a.0[5] >>= 3;
+            b.0[5] >>= 3;
+            c.0[5] >>= 3;
 
             let mut abc = a;
             abc.add_nocarry(&b);
@@ -1355,111 +1345,126 @@ mod tests {
     fn test_fp_add_assign() {
         {
             // Random number
-            let mut tmp = Fp(FpRepr::new([
-                0x624434821df92b69,
-                0x503260c04fd2e2ea,
-                0xd9df726e0d16e8ce,
-                0xfbcb39adfd5dfaeb,
-                0x86b8a22b0c88b112,
-                0x165a2ed809e4201b,
-            ])
-            .0);
-            assert!(!tmp.is_zero());
-            // Test that adding zero has no effect.
-            tmp.add_assign(&Fp(FpRepr::from(0).0));
-            assert_eq!(
-                tmp,
-                Fp(FpRepr::new([
+            let mut tmp = Fp(blst::blst_fp {
+                l: [
                     0x624434821df92b69,
                     0x503260c04fd2e2ea,
                     0xd9df726e0d16e8ce,
                     0xfbcb39adfd5dfaeb,
                     0x86b8a22b0c88b112,
-                    0x165a2ed809e4201b
-                ])
-                .0)
+                    0x165a2ed809e4201b,
+                ],
+            });
+            assert!(!tmp.is_zero());
+            // Test that adding zero has no effect.
+            tmp.add_assign(&Fp::from(0));
+            assert_eq!(
+                tmp,
+                Fp(blst::blst_fp {
+                    l: [
+                        0x624434821df92b69,
+                        0x503260c04fd2e2ea,
+                        0xd9df726e0d16e8ce,
+                        0xfbcb39adfd5dfaeb,
+                        0x86b8a22b0c88b112,
+                        0x165a2ed809e4201b
+                    ]
+                })
             );
             // Add one and test for the result.
-            tmp.add_assign(&Fp(FpRepr::from(1).0));
+            tmp.add_assign(&Fp(blst::blst_fp {
+                l: [1, 0, 0, 0, 0, 0],
+            }));
             assert_eq!(
                 tmp,
-                Fp(FpRepr::new([
-                    0x624434821df92b6a,
-                    0x503260c04fd2e2ea,
-                    0xd9df726e0d16e8ce,
-                    0xfbcb39adfd5dfaeb,
-                    0x86b8a22b0c88b112,
-                    0x165a2ed809e4201b
-                ])
-                .0)
+                Fp(blst::blst_fp {
+                    l: [
+                        0x624434821df92b6a,
+                        0x503260c04fd2e2ea,
+                        0xd9df726e0d16e8ce,
+                        0xfbcb39adfd5dfaeb,
+                        0x86b8a22b0c88b112,
+                        0x165a2ed809e4201b
+                    ]
+                })
             );
             // Add another random number that exercises the reduction.
-            tmp.add_assign(&Fp(FpRepr::new([
-                0x374d8f8ea7a648d8,
-                0xe318bb0ebb8bfa9b,
-                0x613d996f0a95b400,
-                0x9fac233cb7e4fef1,
-                0x67e47552d253c52,
-                0x5c31b227edf25da,
-            ])
-            .0));
+            tmp.add_assign(&Fp(blst::blst_fp {
+                l: [
+                    0x374d8f8ea7a648d8,
+                    0xe318bb0ebb8bfa9b,
+                    0x613d996f0a95b400,
+                    0x9fac233cb7e4fef1,
+                    0x67e47552d253c52,
+                    0x5c31b227edf25da,
+                ],
+            }));
             assert_eq!(
                 tmp,
-                Fp(FpRepr::new([
-                    0xdf92c410c59fc997,
-                    0x149f1bd05a0add85,
-                    0xd3ec393c20fba6ab,
-                    0x37001165c1bde71d,
-                    0x421b41c9f662408e,
-                    0x21c38104f435f5b
-                ])
-                .0)
+                Fp(blst::blst_fp {
+                    l: [
+                        0xdf92c410c59fc997,
+                        0x149f1bd05a0add85,
+                        0xd3ec393c20fba6ab,
+                        0x37001165c1bde71d,
+                        0x421b41c9f662408e,
+                        0x21c38104f435f5b
+                    ]
+                })
             );
             // Add one to (q - 1) and test for the result.
-            tmp = Fp(FpRepr::new([
-                0xb9feffffffffaaaa,
-                0x1eabfffeb153ffff,
-                0x6730d2a0f6b0f624,
-                0x64774b84f38512bf,
-                0x4b1ba7b6434bacd7,
-                0x1a0111ea397fe69a,
-            ])
-            .0);
-            tmp.add_assign(&Fp(FpRepr::from(1).0));
-            assert!(tmp.into_repr().is_zero());
-            // Add a random number to another one such that the result is q - 1
-            tmp = Fp(FpRepr::new([
-                0x531221a410efc95b,
-                0x72819306027e9717,
-                0x5ecefb937068b746,
-                0x97de59cd6feaefd7,
-                0xdc35c51158644588,
-                0xb2d176c04f2100,
-            ])
-            .0);
-            tmp.add_assign(&Fp(FpRepr::new([
-                0x66ecde5bef0fe14f,
-                0xac2a6cf8aed568e8,
-                0x861d70d86483edd,
-                0xcc98f1b7839a22e8,
-                0x6ee5e2a4eae7674e,
-                0x194e40737930c599,
-            ])
-            .0));
-            assert_eq!(
-                tmp,
-                Fp(FpRepr::new([
+            tmp = Fp(blst::blst_fp {
+                l: [
                     0xb9feffffffffaaaa,
                     0x1eabfffeb153ffff,
                     0x6730d2a0f6b0f624,
                     0x64774b84f38512bf,
                     0x4b1ba7b6434bacd7,
-                    0x1a0111ea397fe69a
-                ])
-                .0)
+                    0x1a0111ea397fe69a,
+                ],
+            });
+            tmp.add_assign(&Fp(blst::blst_fp {
+                l: [1, 0, 0, 0, 0, 0],
+            }));
+            assert!(tmp.into_repr().is_zero());
+            // Add a random number to another one such that the result is q - 1
+            tmp = Fp(blst::blst_fp {
+                l: [
+                    0x531221a410efc95b,
+                    0x72819306027e9717,
+                    0x5ecefb937068b746,
+                    0x97de59cd6feaefd7,
+                    0xdc35c51158644588,
+                    0xb2d176c04f2100,
+                ],
+            });
+            tmp.add_assign(&Fp(blst::blst_fp {
+                l: [
+                    0x66ecde5bef0fe14f,
+                    0xac2a6cf8aed568e8,
+                    0x861d70d86483edd,
+                    0xcc98f1b7839a22e8,
+                    0x6ee5e2a4eae7674e,
+                    0x194e40737930c599,
+                ],
+            }));
+            assert_eq!(
+                tmp,
+                Fp(blst::blst_fp {
+                    l: [
+                        0xb9feffffffffaaaa,
+                        0x1eabfffeb153ffff,
+                        0x6730d2a0f6b0f624,
+                        0x64774b84f38512bf,
+                        0x4b1ba7b6434bacd7,
+                        0x1a0111ea397fe69a
+                    ]
+                })
             );
             // Add one to the result and test for it.
-            tmp.add_assign(&Fp(FpRepr::from(1).0));
+            tmp.add_assign(&Fp(blst::blst_fp {
+                l: [1, 0, 0, 0, 0, 0],
+            }));
             assert!(tmp.into_repr().is_zero());
         }
 
@@ -1494,95 +1499,103 @@ mod tests {
     fn test_fp_sub_assign() {
         {
             // Test arbitrary subtraction that tests reduction.
-            let mut tmp = Fp(FpRepr::new([
-                0x531221a410efc95b,
-                0x72819306027e9717,
-                0x5ecefb937068b746,
-                0x97de59cd6feaefd7,
-                0xdc35c51158644588,
-                0xb2d176c04f2100,
-            ])
-            .0);
-            tmp.sub_assign(&Fp(FpRepr::new([
-                0x98910d20877e4ada,
-                0x940c983013f4b8ba,
-                0xf677dc9b8345ba33,
-                0xbef2ce6b7f577eba,
-                0xe1ae288ac3222c44,
-                0x5968bb602790806,
-            ])
-            .0));
-            assert_eq!(
-                tmp,
-                Fp(FpRepr::new([
-                    0x748014838971292c,
-                    0xfd20fad49fddde5c,
-                    0xcf87f198e3d3f336,
-                    0x3d62d6e6e41883db,
-                    0x45a3443cd88dc61b,
-                    0x151d57aaf755ff94
-                ])
-                .0)
-            );
-
-            // Test the opposite subtraction which doesn't test reduction.
-            tmp = Fp(FpRepr::new([
-                0x98910d20877e4ada,
-                0x940c983013f4b8ba,
-                0xf677dc9b8345ba33,
-                0xbef2ce6b7f577eba,
-                0xe1ae288ac3222c44,
-                0x5968bb602790806,
-            ])
-            .0);
-            tmp.sub_assign(&Fp(FpRepr::new([
-                0x531221a410efc95b,
-                0x72819306027e9717,
-                0x5ecefb937068b746,
-                0x97de59cd6feaefd7,
-                0xdc35c51158644588,
-                0xb2d176c04f2100,
-            ])
-            .0));
-            assert_eq!(
-                tmp,
-                Fp(FpRepr::new([
-                    0x457eeb7c768e817f,
-                    0x218b052a117621a3,
-                    0x97a8e10812dd02ed,
-                    0x2714749e0f6c8ee3,
-                    0x57863796abde6bc,
-                    0x4e3ba3f4229e706
-                ])
-                .0)
-            );
-
-            // Test for sensible results with zero
-            tmp = Fp(FpRepr::from(0).0);
-            tmp.sub_assign(&Fp(FpRepr::from(0).0));
-            assert!(tmp.is_zero());
-
-            tmp = Fp(FpRepr::new([
-                0x98910d20877e4ada,
-                0x940c983013f4b8ba,
-                0xf677dc9b8345ba33,
-                0xbef2ce6b7f577eba,
-                0xe1ae288ac3222c44,
-                0x5968bb602790806,
-            ])
-            .0);
-            tmp.sub_assign(&Fp(FpRepr::from(0).0));
-            assert_eq!(
-                tmp,
-                Fp(FpRepr::new([
+            let mut tmp = Fp(blst::blst_fp {
+                l: [
+                    0x531221a410efc95b,
+                    0x72819306027e9717,
+                    0x5ecefb937068b746,
+                    0x97de59cd6feaefd7,
+                    0xdc35c51158644588,
+                    0xb2d176c04f2100,
+                ],
+            });
+            tmp.sub_assign(&Fp(blst::blst_fp {
+                l: [
                     0x98910d20877e4ada,
                     0x940c983013f4b8ba,
                     0xf677dc9b8345ba33,
                     0xbef2ce6b7f577eba,
                     0xe1ae288ac3222c44,
-                    0x5968bb602790806
-                ])
-                .0)
+                    0x5968bb602790806,
+                ],
+            }));
+            assert_eq!(
+                tmp,
+                Fp(blst::blst_fp {
+                    l: [
+                        0x748014838971292c,
+                        0xfd20fad49fddde5c,
+                        0xcf87f198e3d3f336,
+                        0x3d62d6e6e41883db,
+                        0x45a3443cd88dc61b,
+                        0x151d57aaf755ff94
+                    ]
+                })
+            );
+
+            // Test the opposite subtraction which doesn't test reduction.
+            tmp = Fp(blst::blst_fp {
+                l: [
+                    0x98910d20877e4ada,
+                    0x940c983013f4b8ba,
+                    0xf677dc9b8345ba33,
+                    0xbef2ce6b7f577eba,
+                    0xe1ae288ac3222c44,
+                    0x5968bb602790806,
+                ],
+            });
+            tmp.sub_assign(&Fp(blst::blst_fp {
+                l: [
+                    0x531221a410efc95b,
+                    0x72819306027e9717,
+                    0x5ecefb937068b746,
+                    0x97de59cd6feaefd7,
+                    0xdc35c51158644588,
+                    0xb2d176c04f2100,
+                ],
+            }));
+            assert_eq!(
+                tmp,
+                Fp(blst::blst_fp {
+                    l: [
+                        0x457eeb7c768e817f,
+                        0x218b052a117621a3,
+                        0x97a8e10812dd02ed,
+                        0x2714749e0f6c8ee3,
+                        0x57863796abde6bc,
+                        0x4e3ba3f4229e706
+                    ]
+                })
+            );
+
+            // Test for sensible results with zero
+            tmp = Fp::from(0);
+            tmp.sub_assign(&Fp::from(0));
+            assert!(tmp.is_zero());
+
+            tmp = Fp(blst::blst_fp {
+                l: [
+                    0x98910d20877e4ada,
+                    0x940c983013f4b8ba,
+                    0xf677dc9b8345ba33,
+                    0xbef2ce6b7f577eba,
+                    0xe1ae288ac3222c44,
+                    0x5968bb602790806,
+                ],
+            });
+            tmp.sub_assign(&Fp::from(0));
+            assert_eq!(
+                tmp,
+                Fp(blst::blst_fp {
+                    l: [
+                        0x98910d20877e4ada,
+                        0x940c983013f4b8ba,
+                        0xf677dc9b8345ba33,
+                        0xbef2ce6b7f577eba,
+                        0xe1ae288ac3222c44,
+                        0x5968bb602790806
+                    ]
+                })
             );
         }
 
@@ -1610,32 +1623,35 @@ mod tests {
     #[test]
     fn test_fp_mul_assign() {
         assert_eq!(
-            Fp(FpRepr::new([
-                0xcc6200000020aa8a,
-                0x422800801dd8001a,
-                0x7f4f5e619041c62c,
-                0x8a55171ac70ed2ba,
-                0x3f69cc3a3d07d58b,
-                0xb972455fd09b8ef,
-            ])
-            .0) * &Fp(FpRepr::new([
-                0x329300000030ffcf,
-                0x633c00c02cc40028,
-                0xbef70d925862a942,
-                0x4f7fa2a82a963c17,
-                0xdf1eb2575b8bc051,
-                0x1162b680fb8e9566,
-            ])
-            .0),
-            Fp(FpRepr::new([
-                0x9dc4000001ebfe14,
-                0x2850078997b00193,
-                0xa8197f1abb4d7bf,
-                0xc0309573f4bfe871,
-                0xf48d0923ffaf7620,
-                0x11d4b58c7a926e66
-            ])
-            .0)
+            Fp(blst::blst_fp {
+                l: [
+                    0xcc6200000020aa8a,
+                    0x422800801dd8001a,
+                    0x7f4f5e619041c62c,
+                    0x8a55171ac70ed2ba,
+                    0x3f69cc3a3d07d58b,
+                    0xb972455fd09b8ef,
+                ]
+            }) * &Fp(blst::blst_fp {
+                l: [
+                    0x329300000030ffcf,
+                    0x633c00c02cc40028,
+                    0xbef70d925862a942,
+                    0x4f7fa2a82a963c17,
+                    0xdf1eb2575b8bc051,
+                    0x1162b680fb8e9566,
+                ]
+            }),
+            Fp(blst::blst_fp {
+                l: [
+                    0x9dc4000001ebfe14,
+                    0x2850078997b00193,
+                    0xa8197f1abb4d7bf,
+                    0xc0309573f4bfe871,
+                    0xf48d0923ffaf7620,
+                    0x11d4b58c7a926e66
+                ]
+            })
         );
 
         let mut rng = XorShiftRng::from_seed([
@@ -1686,15 +1702,16 @@ mod tests {
 
     #[test]
     fn test_fp_squaring() {
-        let mut a = Fp(FpRepr::new([
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0x19ffffffffffffff,
-        ])
-        .0);
+        let mut a = Fp(blst::blst_fp {
+            l: [
+                0xffffffffffffffff,
+                0xffffffffffffffff,
+                0xffffffffffffffff,
+                0xffffffffffffffff,
+                0xffffffffffffffff,
+                0x19ffffffffffffff,
+            ],
+        });
         assert!(!a.is_zero());
         a.square();
         assert_eq!(
