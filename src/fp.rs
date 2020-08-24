@@ -4,9 +4,7 @@
 use blst::*;
 
 use core::{
-    cmp,
-    convert::TryInto,
-    fmt, mem,
+    cmp, fmt, mem,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use fff::{Field, PrimeField};
@@ -800,7 +798,7 @@ impl Fp {
             blst_fp_from_lendian(&mut raw, bytes.as_ptr());
         }
 
-        raw.try_into().ok()
+        Some(Fp(raw))
     }
 
     /// Attempts to convert a big-endian byte representation of
@@ -812,7 +810,7 @@ impl Fp {
             blst_fp_from_bendian(&mut raw, bytes.as_ptr());
         }
 
-        raw.try_into().ok()
+        Some(Fp(raw))
     }
 
     /// Converts an element of `Fp` into a byte representation in
