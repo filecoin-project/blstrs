@@ -822,15 +822,11 @@ impl Fp {
     /// Converts an element of `Fp` into a byte representation in
     /// little-endian byte order.
     pub fn to_bytes_le(&self) -> [u8; 48] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 48];
+        let mut out = [0u8; 48];
 
         unsafe {
-            blst_lendian_from_fp(out_v.as_mut_ptr(), &self.0);
+            blst_lendian_from_fp(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 48];
-        out.copy_from_slice(&out_v);
 
         out
     }
@@ -838,15 +834,11 @@ impl Fp {
     /// Converts an element of `Fp` into a byte representation in
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 48] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 48];
+        let mut out = [0u8; 48];
 
         unsafe {
-            blst_bendian_from_fp(out_v.as_mut_ptr(), &self.0);
+            blst_bendian_from_fp(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 48];
-        out.copy_from_slice(&out_v);
 
         out
     }

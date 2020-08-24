@@ -174,30 +174,22 @@ impl groupy::CurveAffine for G1Affine {
 impl G1Affine {
     /// Serializes this element into compressed form.
     pub fn to_compressed(&self) -> [u8; 48] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 48];
+        let mut out = [0u8; 48];
 
         unsafe {
-            blst_p1_affine_compress(out_v.as_mut_ptr(), &self.0);
+            blst_p1_affine_compress(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 48];
-        out.copy_from_slice(&out_v);
 
         out
     }
 
     /// Serializes this element into uncompressed form.
     pub fn to_uncompressed(&self) -> [u8; 96] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 96];
+        let mut out = [0u8; 96];
 
         unsafe {
-            blst_p1_affine_serialize(out_v.as_mut_ptr(), &self.0);
+            blst_p1_affine_serialize(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 96];
-        out.copy_from_slice(&out_v);
 
         out
     }
@@ -411,30 +403,22 @@ impl_binops_multiplicative_mixed!(G1Affine, Scalar, G1Projective);
 impl G1Projective {
     /// Serializes this element into compressed form.
     pub fn to_compressed(&self) -> [u8; 48] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 48];
+        let mut out = [0u8; 48];
 
         unsafe {
-            blst_p1_compress(out_v.as_mut_ptr(), &self.0);
+            blst_p1_compress(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 48];
-        out.copy_from_slice(&out_v);
 
         out
     }
 
     /// Serializes this element into uncompressed form.
     pub fn to_uncompressed(&self) -> [u8; 96] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 96];
+        let mut out = [0u8; 96];
 
         unsafe {
-            blst_p1_serialize(out_v.as_mut_ptr(), &self.0);
+            blst_p1_serialize(out.as_mut_ptr(), &self.0);
         }
-
-        let mut out = [0u8; 96];
-        out.copy_from_slice(&out_v);
 
         out
     }

@@ -702,8 +702,7 @@ impl Scalar {
     /// Converts an element of `Scalar` into a byte representation in
     /// little-endian byte order.
     pub fn to_bytes_le(&self) -> [u8; 32] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 32];
+        let mut out_v = [0u8; 32];
 
         let mut out = blst_fr::default();
         unsafe {
@@ -718,17 +717,13 @@ impl Scalar {
             blst_lendian_from_scalar(out_v.as_mut_ptr(), &scalar);
         }
 
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&out_v);
-
-        out
+        out_v
     }
 
     /// Converts an element of `Scalar` into a byte representation in
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 32] {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut out_v = vec![0u8; 32];
+        let mut out_v = [0u8; 32];
 
         let mut out = blst_fr::default();
         unsafe {
@@ -741,10 +736,8 @@ impl Scalar {
         unsafe {
             blst_bendian_from_scalar(out_v.as_mut_ptr(), &scalar);
         }
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&out_v);
 
-        out
+        out_v
     }
 
     /// Multiplies `rhs` by `self`, returning the result.
