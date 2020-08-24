@@ -625,7 +625,7 @@ impl groupy::CurveProjective for G2Projective {
     fn double(&mut self) {
         let mut out = blst_p2::default();
 
-        unsafe { blst_p2_add_or_double(&mut out, &self.0, &self.0) };
+        unsafe { blst_p2_double(&mut out, &self.0) };
 
         self.0 = out;
     }

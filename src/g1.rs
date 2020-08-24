@@ -592,7 +592,7 @@ impl groupy::CurveProjective for G1Projective {
     fn double(&mut self) {
         let mut out = blst_p1::default();
 
-        unsafe { blst_p1_add_or_double(&mut out, &self.0, &self.0) };
+        unsafe { blst_p1_double(&mut out, &self.0) };
 
         self.0 = out;
     }
