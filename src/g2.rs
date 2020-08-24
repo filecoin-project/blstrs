@@ -8,7 +8,7 @@ use core::{
 };
 
 use blst::*;
-use fff::{Field, PrimeField, PrimeFieldRepr, SqrtField};
+use fff::{Field, PrimeField, PrimeFieldRepr};
 use rand_core::RngCore;
 
 use crate::{Fp12, Fp2, G1Affine, Scalar, ScalarRepr};
@@ -295,58 +295,6 @@ impl G2Affine {
         on_curve || self.is_zero()
     }
 
-    /// Attempts to construct an affine point given an x-coordinate. The
-    /// point is not guaranteed to be in the prime order subgroup.
-    ///
-    /// If and only if `greatest` is set will the lexicographically
-    /// largest y-coordinate be selected.
-    fn get_point_from_x(x: Fp2, greatest: bool) -> Option<Self> {
-        // Compute x^3 + b
-        let mut x3b = x;
-        x3b.square();
-        x3b *= &x;
-        x3b += &Fp2::new(crate::fp::B_COEFF, crate::fp::B_COEFF);
-
-        x3b.sqrt().map(|y| {
-            let mut negy = y;
-            negy.negate();
-
-            G2Affine(blst_p2_affine {
-                x: x.0,
-                y: if (y < negy) ^ greatest { y.0 } else { negy.0 },
-            })
-        })
-    }
-
-    fn scale_by_cofactor(&self) -> G2Projective {
-        // G2 cofactor = (x^8 - 4 x^7 + 5 x^6) - (4 x^4 + 6 x^3 - 4 x^2 - 4 x + 13) // 9
-        // 0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5
-        let cofactor = fff::BitIterator::new([
-            0xcf1c38e31c7238e5,
-            0x1616ec6e786f0c70,
-            0x21537e293a6691ae,
-            0xa628f1cb4d9e82ef,
-            0xa68a205b2e5a7ddf,
-            0xcd91de4547085aba,
-            0x91d50792876a202,
-            0x5d543a95414e7f1,
-        ]);
-        self.mul_bits(cofactor)
-    }
-
-    fn mul_bits<S: AsRef<[u64]>>(&self, bits: fff::BitIterator<S>) -> G2Projective {
-        use groupy::CurveProjective;
-
-        let mut res = G2Projective::zero();
-        for i in bits {
-            res.double();
-            if i {
-                res.add_assign_mixed(self)
-            }
-        }
-        res
-    }
-
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {
         let mut raw = blst_p2_affine::default();
         raw.x = x.0;
@@ -589,21 +537,6 @@ impl G2Projective {
         G2Projective(out)
     }
 
-    pub fn random<R: RngCore>(rng: &mut R) -> Self {
-        loop {
-            let x = Fp2::random(rng);
-            let greatest = rng.next_u32() % 2 != 0;
-
-            if let Some(p) = G2Affine::get_point_from_x(x, greatest) {
-                let p = p.scale_by_cofactor();
-
-                if !p.is_zero() {
-                    return p;
-                }
-            }
-        }
-    }
-
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, z: Fp2) -> Self {
         let mut raw = blst_p2::default();
         raw.x = x.0;
@@ -636,18 +569,25 @@ impl groupy::CurveProjective for G2Projective {
     type Affine = G2Affine;
 
     fn random<R: RngCore>(rng: &mut R) -> Self {
-        loop {
-            let x = Fp2::random(rng);
-            let greatest = rng.next_u32() % 2 != 0;
+        let mut out = blst_p2::default();
+        let mut msg = [0u8; 64];
+        rng.fill_bytes(&mut msg);
+        const DST: [u8; 16] = [0; 16];
+        const AUG: [u8; 16] = [0; 16];
 
-            if let Some(p) = G2Affine::get_point_from_x(x, greatest) {
-                let p = p.scale_by_cofactor();
+        unsafe {
+            blst_encode_to_g2(
+                &mut out,
+                msg.as_ptr(),
+                msg.len(),
+                DST.as_ptr(),
+                DST.len(),
+                AUG.as_ptr(),
+                AUG.len(),
+            )
+        };
 
-                if !p.is_zero() {
-                    return p;
-                }
-            }
-        }
+        G2Projective(out)
     }
 
     fn zero() -> Self {
@@ -835,43 +775,6 @@ mod tests {
     use crate::{Fp, Fp2, FpRepr, G2Affine, G2Projective};
     use fff::{Field, PrimeField};
     use groupy::CurveProjective;
-
-    #[test]
-    fn g2_generator() {
-        use crate::SqrtField;
-
-        let mut x = Fp2::zero();
-        let mut i = 0;
-        loop {
-            // y^2 = x^3 + b
-            let mut rhs = x;
-            rhs.square();
-            rhs *= &x;
-            rhs += &Fp2::new(crate::fp::B_COEFF, crate::fp::B_COEFF);
-
-            if let Some(y) = rhs.sqrt() {
-                let mut negy = y;
-                negy.negate();
-
-                let p = G2Affine::from_raw_unchecked(x, y, false);
-
-                assert!(!p.is_torsion_free());
-
-                let g2 = p.scale_by_cofactor();
-                if !g2.is_zero() {
-                    assert_eq!(i, 2);
-                    let g2 = G2Affine::from(g2);
-
-                    assert!(g2.is_torsion_free());
-                    assert_eq!(g2, G2Affine::one());
-                    break;
-                }
-            }
-
-            i += 1;
-            x += &Fp2::one();
-        }
-    }
 
     #[test]
     fn g2_test_is_valid() {

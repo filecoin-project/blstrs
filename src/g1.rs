@@ -8,7 +8,7 @@ use core::{
 };
 
 use blst::*;
-use fff::{Field, PrimeField, PrimeFieldRepr, SqrtField};
+use fff::{Field, PrimeField, PrimeFieldRepr};
 use groupy::{CurveAffine, CurveProjective};
 use rand_core::RngCore;
 
@@ -279,36 +279,6 @@ impl G1Affine {
         on_curve || self.is_zero()
     }
 
-    /// Attempts to construct an affine point given an x-coordinate. The
-    /// point is not guaranteed to be in the prime order subgroup.
-    ///
-    /// If and only if `greatest` is set will the lexicographically
-    /// largest y-coordinate be selected.
-    fn get_point_from_x(x: Fp, greatest: bool) -> Option<Self> {
-        // Compute x^3 + b
-        let mut x3b = x;
-        x3b.square();
-        x3b *= &x;
-        x3b += &crate::fp::B_COEFF;
-
-        x3b.sqrt().map(|y| {
-            let mut negy = y;
-            negy.negate();
-
-            G1Affine(blst_p1_affine {
-                x: x.0,
-                y: if (y < negy) ^ greatest { y.0 } else { negy.0 },
-            })
-        })
-    }
-
-    fn scale_by_cofactor(&self) -> G1Projective {
-        // G1 cofactor = (x - 1)^2 / 3  = 76329603384216526031706109802092473003
-        G1Projective::from(self).multiply(&ScalarRepr(blst_fr {
-            l: [0x8c00aaab0000aaab, 0x396c8c005555e156, 0, 0],
-        }))
-    }
-
     pub fn from_raw_unchecked(x: Fp, y: Fp, _infinity: bool) -> Self {
         let mut raw = blst_p1_affine::default();
         raw.x = x.0;
@@ -567,18 +537,25 @@ impl groupy::CurveProjective for G1Projective {
     type Affine = G1Affine;
 
     fn random<R: RngCore>(rng: &mut R) -> Self {
-        loop {
-            let x = Fp::random(rng);
-            let greatest = rng.next_u32() % 2 != 0;
+        let mut out = blst_p1::default();
+        let mut msg = [0u8; 64];
+        rng.fill_bytes(&mut msg);
+        const DST: [u8; 16] = [0; 16];
+        const AUG: [u8; 16] = [0; 16];
 
-            if let Some(p) = G1Affine::get_point_from_x(x, greatest) {
-                let p = p.scale_by_cofactor();
+        unsafe {
+            blst_encode_to_g1(
+                &mut out,
+                msg.as_ptr(),
+                msg.len(),
+                DST.as_ptr(),
+                DST.len(),
+                AUG.as_ptr(),
+                AUG.len(),
+            )
+        };
 
-                if !p.is_zero() {
-                    return p;
-                }
-            }
-        }
+        G1Projective(out)
     }
 
     fn zero() -> Self {
