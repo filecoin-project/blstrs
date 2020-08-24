@@ -599,12 +599,12 @@ impl fff::Field for Fp {
 
         loop {
             let mut raw = blst_fp::default();
-            for i in 0..4 {
+            for i in 0..6 {
                 raw.l[i] = rng.next_u64();
             }
 
             // Mask away the unused most-significant bits.
-            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+            raw.l[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
             if FpRepr(raw) < MODULUS {
                 return Fp(raw);
