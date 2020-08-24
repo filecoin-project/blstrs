@@ -214,10 +214,8 @@ impl G1Affine {
         if bytes.iter().all(|&b| b == 0) {
             return Some(Self::zero());
         }
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
-        if unsafe { blst_p1_deserialize(&mut raw, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS } {
+        if unsafe { blst_p1_deserialize(&mut raw, bytes.as_ptr()) != BLST_ERROR::BLST_SUCCESS } {
             return None;
         }
 
@@ -245,11 +243,9 @@ impl G1Affine {
             return Some(Self::zero());
         }
 
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut in_v = bytes.to_vec();
         let mut raw = blst_p1_affine::default();
 
-        if unsafe { blst_p1_uncompress(&mut raw, in_v.as_mut_ptr()) != BLST_ERROR::BLST_SUCCESS } {
+        if unsafe { blst_p1_uncompress(&mut raw, bytes.as_ptr()) != BLST_ERROR::BLST_SUCCESS } {
             return None;
         }
 

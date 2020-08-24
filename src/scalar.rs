@@ -661,12 +661,10 @@ impl Scalar {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes_le(bytes: &[u8; 32]) -> Option<Scalar> {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut in_v = bytes.to_vec();
         let mut raw = blst_scalar::default();
 
         unsafe {
-            blst_scalar_from_lendian(&mut raw, in_v.as_mut_ptr());
+            blst_scalar_from_lendian(&mut raw, bytes.as_ptr());
         }
 
         raw.try_into().ok()
@@ -675,12 +673,10 @@ impl Scalar {
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes_be(bytes: &[u8; 32]) -> Option<Scalar> {
-        // TODO: figure out if there is a way to avoid this heap allocation
-        let mut in_v = bytes.to_vec();
         let mut raw = blst_scalar::default();
 
         unsafe {
-            blst_scalar_from_bendian(&mut raw, in_v.as_mut_ptr());
+            blst_scalar_from_bendian(&mut raw, bytes.as_ptr());
         }
 
         raw.try_into().ok()
