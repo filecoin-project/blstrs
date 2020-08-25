@@ -632,12 +632,9 @@ impl TryInto<Scalar> for blst_scalar {
             return Err(NotInFieldError);
         }
 
-        // Safe because valid fr check was just made above.
-        let fr: blst_fr = unsafe { std::mem::transmute(self) };
-
         let mut out = blst_fr::default();
-        // convert to montgomery
-        unsafe { blst_fr_to(&mut out, &fr) }
+
+        unsafe { blst_fr_from_scalar(&mut out, &self) };
 
         Ok(Scalar(out))
     }
@@ -671,42 +668,29 @@ impl Scalar {
     /// Converts an element of `Scalar` into a byte representation in
     /// little-endian byte order.
     pub fn to_bytes_le(&self) -> [u8; 32] {
-        let mut out_v = [0u8; 32];
+        let mut out = [0u8; 32];
 
-        let mut out = blst_fr::default();
+        let mut scalar = blst_scalar::default();
         unsafe {
-            // transform out of montgomery
-            blst_fr_from(&mut out, &self.0);
+            blst_scalar_from_fr(&mut scalar, &self.0);
+            blst_lendian_from_scalar(out.as_mut_ptr(), &scalar);
         }
 
-        // Safe because any valid blst_fr is also a valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(out) };
-
-        unsafe {
-            blst_lendian_from_scalar(out_v.as_mut_ptr(), &scalar);
-        }
-
-        out_v
+        out
     }
 
     /// Converts an element of `Scalar` into a byte representation in
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 32] {
-        let mut out_v = [0u8; 32];
+        let mut out = [0u8; 32];
 
-        let mut out = blst_fr::default();
+        let mut scalar = blst_scalar::default();
         unsafe {
-            // transform out of montgomery
-            blst_fr_from(&mut out, &self.0);
+            blst_scalar_from_fr(&mut scalar, &self.0);
+            blst_bendian_from_scalar(out.as_mut_ptr(), &scalar);
         }
 
-        // Safe because any valid blst_fr is also a valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(out) };
-        unsafe {
-            blst_bendian_from_scalar(out_v.as_mut_ptr(), &scalar);
-        }
-
-        out_v
+        out
     }
 
     /// Multiplies `rhs` by `self`, returning the result.

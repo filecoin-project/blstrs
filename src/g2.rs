@@ -499,10 +499,11 @@ impl G2Projective {
         // Sclar is 255 bits wide.
         const NBITS: usize = 255;
 
-        // Safe, because all bslt_fr are valid blst_scalar.
-        let scalar: blst_scalar = unsafe { std::mem::transmute(by.0) };
-
-        unsafe { blst_p2_mult(&mut out, &self.0, &scalar, NBITS) };
+        let mut scalar = blst_scalar::default();
+        unsafe {
+            blst_scalar_from_uint64(&mut scalar, by.0.as_ptr());
+            blst_p2_mult(&mut out, &self.0, &scalar, NBITS)
+        };
 
         G2Projective(out)
     }
