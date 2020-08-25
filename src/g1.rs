@@ -1189,18 +1189,22 @@ mod tests {
     #[test]
     fn test_projective_scalar_multiplication() {
         let g = G1Projective::one();
-        let a = Scalar::from_raw([
-            0x2b568297a56da71c,
-            0xd8c39ecb0ef375d1,
-            0x435c38da67bfbf96,
-            0x8088a05026b659b2,
-        ]);
-        let b = Scalar::from_raw([
-            0x785fdd9b26ef8b85,
-            0xc997f25837695c18,
-            0x4c8dbc39e7b756c1,
-            0x70d9b6cc6d87df20,
-        ]);
+        let a = Scalar(blst::blst_fr {
+            l: [
+                0x2b568297a56da71c,
+                0xd8c39ecb0ef375d1,
+                0x435c38da67bfbf96,
+                0x8088a05026b659b2,
+            ],
+        });
+        let b = Scalar(blst_fr {
+            l: [
+                0x785fdd9b26ef8b85,
+                0xc997f25837695c18,
+                0x4c8dbc39e7b756c1,
+                0x70d9b6cc6d87df20,
+            ],
+        });
         let c = a * b;
 
         assert_eq!((g * a) * b, g * c);
@@ -1209,18 +1213,22 @@ mod tests {
     #[test]
     fn test_affine_scalar_multiplication() {
         let g = G1Affine::one();
-        let a = Scalar::from_raw([
-            0x2b568297a56da71c,
-            0xd8c39ecb0ef375d1,
-            0x435c38da67bfbf96,
-            0x8088a05026b659b2,
-        ]);
-        let b = Scalar::from_raw([
-            0x785fdd9b26ef8b85,
-            0xc997f25837695c18,
-            0x4c8dbc39e7b756c1,
-            0x70d9b6cc6d87df20,
-        ]);
+        let a = Scalar(blst::blst_fr {
+            l: [
+                0x2b568297a56da71c,
+                0xd8c39ecb0ef375d1,
+                0x435c38da67bfbf96,
+                0x8088a05026b659b2,
+            ],
+        });
+        let b = Scalar(blst::blst_fr {
+            l: [
+                0x785fdd9b26ef8b85,
+                0xc997f25837695c18,
+                0x4c8dbc39e7b756c1,
+                0x70d9b6cc6d87df20,
+            ],
+        });
         let c = a * b;
 
         assert_eq!(G1Affine::from(g * a) * b, g * c);
