@@ -151,11 +151,11 @@ impl groupy::CurveAffine for G1Affine {
     }
 
     fn one() -> Self {
-        G1Affine(unsafe { BLS12_381_G1 })
+        G1Affine(unsafe { *blst_p1_affine_generator() })
     }
 
     fn is_zero(&self) -> bool {
-        self == &Self::zero()
+        unsafe { blst_p1_affine_is_inf(&self.0) }
     }
 
     fn mul<S: Into<<Self::Scalar as PrimeField>::Repr>>(&self, by: S) -> Self::Projective {
@@ -262,9 +262,7 @@ impl G1Affine {
     /// Returns true if this point is on the curve. This should always return
     /// true unless an "unchecked" API was used.
     pub fn is_on_curve(&self) -> bool {
-        let on_curve = unsafe { blst_p1_affine_on_curve(&self.0) };
-        // FIXME: is_zero check should happen in blst
-        on_curve || self.is_zero()
+        unsafe { blst_p1_affine_on_curve(&self.0) }
     }
 
     pub fn from_raw_unchecked(x: Fp, y: Fp, _infinity: bool) -> Self {
@@ -330,8 +328,10 @@ impl Eq for G1Projective {}
 impl PartialEq for G1Projective {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        // TODO: more efficiente method
-        G1Affine::from(self) == G1Affine::from(other)
+        let self_is_zero = self.is_zero();
+        let other_is_zero = other.is_zero();
+        (self_is_zero && other_is_zero)
+            || (!self_is_zero && !other_is_zero && unsafe { blst_p1_is_equal(&self.0, &other.0) })
     }
 }
 
@@ -539,17 +539,15 @@ impl groupy::CurveProjective for G1Projective {
     }
 
     fn zero() -> Self {
-        // The point at infinity is always represented by Z = 0.
         G1Projective(blst_p1::default())
     }
 
     fn one() -> Self {
-        G1Affine::one().into()
+        G1Projective(unsafe { *blst_p1_generator() })
     }
 
-    // The point at infinity is always represented by Z = 0.
     fn is_zero(&self) -> bool {
-        self == &Self::zero()
+        unsafe { blst_p1_is_inf(&self.0) }
     }
 
     fn is_normalized(&self) -> bool {
@@ -559,13 +557,12 @@ impl groupy::CurveProjective for G1Projective {
     fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
         for el in v {
             let el = el.borrow_mut();
-            let mut out = blst_p1_affine::default();
+            let mut tmp = blst_p1_affine::default();
 
-            unsafe { blst_p1_to_affine(&mut out, &el.0) };
-
-            el.0.x = out.x;
-            el.0.y = out.y;
-            el.0.z = Fp::one().0;
+            unsafe {
+                blst_p1_to_affine(&mut tmp, &el.0);
+                blst_p1_from_affine(&mut el.0, &tmp);
+            }
         }
     }
 
@@ -1233,5 +1230,13 @@ mod tests {
     fn groupy_g1_curve_tests() {
         use groupy::tests::curve_tests;
         curve_tests::<G1Projective>();
+    }
+
+    #[test]
+    fn test_g1_is_zero() {
+        assert!(G1Projective::zero().is_zero());
+        assert!(!G1Projective::one().is_zero());
+        assert!(G1Affine::zero().is_zero());
+        assert!(!G1Affine::one().is_zero());
     }
 }

@@ -130,6 +130,7 @@ where
     where
         I: Iterator<Item = T>,
     {
+        use groupy::CurveProjective;
         iter.fold(Self::zero(), |acc, item| acc + item.borrow())
     }
 }
@@ -154,7 +155,7 @@ impl groupy::CurveAffine for G2Affine {
     }
 
     fn is_zero(&self) -> bool {
-        self == &Self::zero()
+        unsafe { blst_p2_affine_is_inf(&self.0) }
     }
 
     fn mul<S: Into<<Self::Scalar as PrimeField>::Repr>>(&self, by: S) -> Self::Projective {
@@ -178,7 +179,7 @@ impl G2Affine {
 
     /// Returns a fixed generator of unknown exponent.
     pub fn one() -> Self {
-        G2Affine(unsafe { BLS12_381_G2 })
+        G2Affine(unsafe { *blst_p2_affine_generator() })
     }
 
     /// Determines if this point represents the point at infinity; the additive identity.
@@ -347,8 +348,12 @@ impl Eq for G2Projective {}
 impl PartialEq for G2Projective {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        // TODO: more efficiente method
-        G2Affine::from(self) == G2Affine::from(other)
+        use groupy::CurveProjective;
+
+        let self_is_zero = self.is_zero();
+        let other_is_zero = other.is_zero();
+        (self_is_zero && other_is_zero)
+            || (!self_is_zero && !other_is_zero && unsafe { blst_p2_is_equal(&self.0, &other.0) })
     }
 }
 
@@ -414,21 +419,6 @@ impl_binops_multiplicative!(G2Projective, Scalar);
 impl_binops_multiplicative_mixed!(G2Affine, Scalar, G2Projective);
 
 impl G2Projective {
-    /// Returns the additive identity.
-    pub fn zero() -> Self {
-        G2Projective(blst_p2::default())
-    }
-
-    /// Returns a fixed generator of unknown exponent.
-    pub fn one() -> Self {
-        G2Affine::one().into()
-    }
-
-    /// Determines if this point represents the point at infinity; the additive identity.
-    pub fn is_zero(&self) -> bool {
-        self == &Self::zero()
-    }
-
     /// Serializes this element into compressed form.
     pub fn to_compressed(&self) -> [u8; 48] {
         let mut out = [0u8; 48];
@@ -571,18 +561,15 @@ impl groupy::CurveProjective for G2Projective {
     }
 
     fn zero() -> Self {
-        // The point at infinity is always represented by Z = 0.
         G2Projective(blst_p2::default())
     }
 
     fn one() -> Self {
-        G2Affine::one().into()
+        G2Projective(unsafe { *blst_p2_generator() })
     }
 
-    // The point at infinity is always represented by
-    // Z = 0.
     fn is_zero(&self) -> bool {
-        self == &Self::zero()
+        unsafe { blst_p2_is_inf(&self.0) }
     }
 
     fn is_normalized(&self) -> bool {
@@ -592,13 +579,12 @@ impl groupy::CurveProjective for G2Projective {
     fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
         for el in v {
             let el = el.borrow_mut();
-            let mut out = blst_p2_affine::default();
+            let mut tmp = blst_p2_affine::default();
 
-            unsafe { blst_p2_to_affine(&mut out, &el.0) };
-
-            el.0.x = out.x;
-            el.0.y = out.y;
-            el.0.z = Fp2::one().0;
+            unsafe {
+                blst_p2_to_affine(&mut tmp, &el.0);
+                blst_p2_from_affine(&mut el.0, &tmp);
+            };
         }
     }
 
@@ -1145,8 +1131,38 @@ mod tests {
     }
 
     #[test]
+    fn test_affine_point_equality() {
+        let a = G2Affine::one();
+        let b = G2Affine::zero();
+
+        assert!(a == a);
+        assert!(b == b);
+        assert!(a != b);
+        assert!(b != a);
+    }
+
+    #[test]
+    fn test_projective_point_equality() {
+        let a = G2Projective::one();
+        let b = G2Projective::zero();
+
+        assert!(a == a);
+        assert!(b == b);
+        assert!(a != b);
+        assert!(b != a);
+    }
+
+    #[test]
     fn groupy_g2_curve_tests() {
         use groupy::tests::curve_tests;
         curve_tests::<G2Projective>();
+    }
+
+    #[test]
+    fn test_g2_is_zero() {
+        assert!(G2Projective::zero().is_zero());
+        assert!(!G2Projective::one().is_zero());
+        assert!(G2Affine::zero().is_zero());
+        assert!(!G2Affine::one().is_zero());
     }
 }

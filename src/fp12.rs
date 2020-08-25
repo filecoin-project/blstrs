@@ -11,7 +11,7 @@ use fff::Field;
 use crate::{Fp, Fp2, Fp6};
 
 /// This represents an element $c_0 + c_1 w$ of $\mathbb{F}_{p^12} = \mathbb{F}_{p^6} / w^2 - v$.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Fp12(pub(crate) blst_fp12);
 
 impl fmt::Debug for Fp12 {
@@ -62,25 +62,6 @@ impl From<Fp12> for blst_fp12 {
 impl Default for Fp12 {
     fn default() -> Self {
         Fp12::zero()
-    }
-}
-
-impl Eq for Fp12 {}
-
-impl PartialEq for Fp12 {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        for (a, b) in self.0.fp6.iter().zip(other.0.fp6.iter()) {
-            for (a, b) in a.fp2.iter().zip(b.fp2.iter()) {
-                for (a, b) in a.fp.iter().zip(b.fp.iter()) {
-                    if &a.l != &b.l {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        true
     }
 }
 
@@ -452,13 +433,11 @@ impl Field for Fp12 {
     }
 
     fn zero() -> Self {
-        Fp12(blst_fp12::default())
+        Fp12::new(Fp6::zero(), Fp6::zero())
     }
 
     fn one() -> Self {
-        Fp12(blst_fp12 {
-            fp6: [Fp6::one().into(), Fp6::zero().into()],
-        })
+        Fp12::new(Fp6::one(), Fp6::zero())
     }
 
     fn is_zero(&self) -> bool {
@@ -531,18 +510,14 @@ impl Field for Fp12 {
     }
 
     fn inverse(&self) -> Option<Self> {
-        let mut c0s = self.c0();
-        c0s.square();
-        let mut c1s = self.c1();
-        c1s.square();
-        c1s.mul_by_nonresidue();
-        c0s -= &c1s;
+        if self.is_zero() {
+            return None;
+        }
+        let mut out = blst_fp12::default();
 
-        c0s.inverse().map(|t| {
-            Fp12(blst_fp12 {
-                fp6: [(t * self.c0()).0, (-(t * self.c1())).0],
-            })
-        })
+        unsafe { blst_fp12_inverse(&mut out, &self.0) }
+
+        Some(Fp12(out))
     }
 }
 
