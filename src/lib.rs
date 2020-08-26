@@ -58,12 +58,19 @@ impl Engine for Bls12 {
             ),
         >,
     {
+        use groupy::CurveAffine;
+
         let mut res = blst::blst_fp12::default();
 
         for (i, (p, q)) in i.into_iter().enumerate() {
             let mut tmp = blst::blst_fp12::default();
-            unsafe {
-                blst::blst_miller_loop_lines(&mut tmp, q.0.as_ptr(), &p.0);
+            if q.is_zero() || p.is_zero() {
+                // Define pairing with zero as one, matching what `pairing` does.
+                tmp = Fp12::one().0;
+            } else {
+                unsafe {
+                    blst::blst_miller_loop_lines(&mut tmp, q.lines.as_ptr(), &p.0);
+                }
             }
             if i == 0 {
                 res = tmp;

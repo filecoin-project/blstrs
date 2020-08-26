@@ -651,7 +651,16 @@ impl groupy::CurveProjective for G2Projective {
 }
 
 #[derive(Clone, Debug)]
-pub struct G2Prepared(pub(crate) Vec<blst_fp6>);
+pub struct G2Prepared {
+    pub(crate) lines: Vec<blst_fp6>,
+    infinity: bool,
+}
+
+impl G2Prepared {
+    pub fn is_zero(&self) -> bool {
+        self.infinity
+    }
+}
 
 impl crate::PairingCurveAffine for G2Affine {
     type Prepared = G2Prepared;
@@ -659,9 +668,19 @@ impl crate::PairingCurveAffine for G2Affine {
     type PairingResult = Fp12;
 
     fn prepare(&self) -> Self::Prepared {
-        let mut lines = vec![blst_fp6::default(); 68];
-        unsafe { blst_precompute_lines(lines.as_mut_ptr(), &self.0) }
-        G2Prepared(lines)
+        if self.is_zero() {
+            G2Prepared {
+                lines: Vec::new(),
+                infinity: true,
+            }
+        } else {
+            let mut lines = vec![blst_fp6::default(); 68];
+            unsafe { blst_precompute_lines(lines.as_mut_ptr(), &self.0) }
+            G2Prepared {
+                lines,
+                infinity: false,
+            }
+        }
     }
 
     fn pairing_with(&self, other: &Self::Pair) -> Self::PairingResult {
