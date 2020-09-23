@@ -382,108 +382,14 @@ impl fff::Field for Scalar {
     }
 
     fn inverse(&self) -> Option<Self> {
-        #[inline(always)]
-        fn square_assign_multi(n: &mut Scalar, num_times: usize) {
-            for _ in 0..num_times {
-                n.square();
-            }
+        let mut t0 = blst_fr::default();
+        unsafe {
+            blst_fr_eucl_inverse(&mut t0, &self.0);
         }
-        // found using https://github.com/kwantam/addchain
-        let mut t0 = *self;
-        t0.square();
-        let mut t1 = t0 * self;
-        let mut t16 = t0;
-        t16.square();
-        let mut t6 = t16;
-        t6.square();
-        let mut t5 = t6 * t0;
-        t0 = t6 * t16;
-        let mut t12 = t5 * t16;
-        let mut t2 = t6;
-        t2.square();
-        let mut t7 = t5 * t6;
-        let mut t15 = t0 * t5;
-        let mut t17 = t12;
-        t17.square();
-        t1 *= t17;
-        let mut t3 = t7 * t2;
-        let t8 = t1 * t17;
-        let t4 = t8 * t2;
-        let t9 = t8 * t7;
-        t7 = t4 * t5;
-        let t11 = t4 * t17;
-        t5 = t9 * t17;
-        let t14 = t7 * t15;
-        let t13 = t11 * t12;
-        t12 = t11 * t17;
-        t15 *= &t12;
-        t16 *= &t15;
-        t3 *= &t16;
-        t17 *= &t3;
-        t0 *= &t17;
-        t6 *= &t0;
-        t2 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t17;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t16;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t14;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t13;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t12;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t11;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 8);
-        t0 *= self;
-        square_assign_multi(&mut t0, 14);
-        t0 *= &t9;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 15);
-        t0 *= &t7;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t5;
-        square_assign_multi(&mut t0, 16);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t4;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
-
         if self.is_zero() {
             None
         } else {
-            Some(t0)
+            Some(Scalar(t0))
         }
     }
 
