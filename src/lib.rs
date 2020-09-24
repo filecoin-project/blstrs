@@ -29,6 +29,9 @@ pub use pairing::*;
 pub use scalar::{Scalar, ScalarRepr, S as SCALAR_S};
 pub use traits::*;
 
+#[cfg(feature = "serde")]
+mod serde_impl;
+
 #[cfg(test)]
 mod tests;
 

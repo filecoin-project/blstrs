@@ -18,7 +18,7 @@ pub struct Fp(pub(crate) blst_fp);
 
 /// Representation of a `Fp`, in regular coordinates.
 #[derive(Default, Clone, Copy)]
-pub struct FpRepr([u64; 6]);
+pub struct FpRepr(pub [u64; 6]);
 
 // -((2**384) mod q) mod q
 pub(crate) const NEGATIVE_ONE: Fp = Fp(blst_fp {
@@ -466,10 +466,11 @@ impl PartialOrd for Fp {
 impl fmt::Debug for Fp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes_le();
-        write!(f, "0x")?;
+        write!(f, "Fp(0x")?;
         for &b in tmp.iter().rev() {
             write!(f, "{:02x}", b)?;
         }
+        write!(f, ")")?;
         Ok(())
     }
 }

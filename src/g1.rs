@@ -17,8 +17,18 @@ use crate::{Fp, Fp12, G2Affine, Scalar, ScalarRepr};
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
 /// improve performance through the use of mixed curve model arithmetic.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct G1Affine(pub(crate) blst_p1_affine);
+
+impl fmt::Debug for G1Affine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("G1Affine")
+            .field("x", &self.x())
+            .field("y", &self.y())
+            .field("infinity", &self.is_zero())
+            .finish()
+    }
+}
 
 impl fmt::Display for G1Affine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -299,8 +309,18 @@ impl G1Affine {
 }
 
 /// This is an element of $\mathbb{G}_1$ represented in the projective coordinate space.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct G1Projective(pub(crate) blst_p1);
+
+impl fmt::Debug for G1Projective {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("G1Projective")
+            .field("x", &self.x())
+            .field("y", &self.y())
+            .field("z", &self.z())
+            .finish()
+    }
+}
 
 impl fmt::Display for G1Projective {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
