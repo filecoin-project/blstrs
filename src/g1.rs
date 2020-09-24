@@ -6,10 +6,11 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use std::io::Read;
 
 use blst::*;
 use fff::{Field, PrimeField, PrimeFieldRepr};
-use groupy::{CurveAffine, CurveProjective};
+use groupy::{CurveAffine, CurveProjective, EncodedPoint};
 use rand_core::RngCore;
 
 use crate::{Fp, Fp12, G2Affine, Scalar, ScalarRepr};
@@ -305,6 +306,54 @@ impl G1Affine {
     fn perform_pairing(&self, other: &G2Affine) -> Fp12 {
         use crate::Engine;
         crate::Bls12::pairing(*self, *other)
+    }
+
+    #[inline]
+    pub fn raw_fmt_size() -> usize {
+        let s = G1Uncompressed::size();
+        s + 1
+    }
+
+    pub fn write_raw<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+        if self.is_zero() {
+            writer.write_all(&[1])?;
+        } else {
+            writer.write_all(&[0])?;
+        }
+        let raw = self.to_uncompressed();
+        writer.write(&raw)?;
+
+        Ok(Self::raw_fmt_size())
+    }
+
+    pub fn read_raw<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
+        let mut buf = [0u8];
+        reader.read_exact(&mut buf)?;
+        let _infinity = buf[0] == 1;
+
+        let mut buf = [0u8; 96];
+        reader.read_exact(&mut buf)?;
+        Self::from_uncompressed_unchecked(&buf).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                groupy::GroupDecodingError::NotOnCurve,
+            )
+        })
+    }
+
+    pub fn read_raw_checked<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
+        let mut buf = [0u8];
+        reader.read_exact(&mut buf)?;
+        let _infinity = buf[0] == 1;
+
+        let mut buf = [0u8; 96];
+        reader.read_exact(&mut buf)?;
+        Self::from_uncompressed(&buf).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                groupy::GroupDecodingError::NotOnCurve,
+            )
+        })
     }
 }
 
@@ -659,7 +708,7 @@ impl fmt::Debug for G1Uncompressed {
     }
 }
 
-impl groupy::EncodedPoint for G1Uncompressed {
+impl EncodedPoint for G1Uncompressed {
     type Affine = G1Affine;
 
     fn empty() -> Self {
@@ -687,7 +736,7 @@ pub struct G1Compressed([u8; 48]);
 
 encoded_point_delegations!(G1Compressed);
 
-impl groupy::EncodedPoint for G1Compressed {
+impl EncodedPoint for G1Compressed {
     type Affine = G1Affine;
 
     fn empty() -> Self {
