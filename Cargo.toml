@@ -9,7 +9,7 @@ license = "MIT/Apache-2.0"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-blst = {  git = "https://github.com/supranational/blst" }
+blst = {  git = "https://github.com/supranational/blst", rev = "cd0847a" }
 rand_core = "0.5.1"
 fff = "0.2.3"
 groupy = "0.3.1"
