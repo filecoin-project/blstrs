@@ -1,15 +1,20 @@
 [package]
 name = "blstrs"
+description = "High performance implementation of BLS12 381"
 version = "0.1.0"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
+repository = "https://github.com/filecoin-project/blstrs"
+documentation = "https://docs.rs/blstrs"
+categories = ["cryptography", "algorithms"]
+readme = "README.md"
 
 [package.metadata.docs.rs]
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-blst = {  git = "https://github.com/supranational/blst", rev = "cd0847a" }
+blst = "0.2.0"
 rand_core = "0.5.1"
 fff = "0.2.3"
 groupy = "0.3.1"

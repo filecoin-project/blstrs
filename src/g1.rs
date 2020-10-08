@@ -321,7 +321,7 @@ impl G1Affine {
             writer.write_all(&[0])?;
         }
         let raw = self.to_uncompressed();
-        writer.write(&raw)?;
+        writer.write_all(&raw)?;
 
         Ok(Self::raw_fmt_size())
     }
