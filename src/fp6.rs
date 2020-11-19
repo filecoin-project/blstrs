@@ -129,8 +129,8 @@ impl<'a, 'b> Mul<&'b Fp6> for &'a Fp6 {
     }
 }
 
-impl_binops_additive!(Fp6, Fp6);
-impl_binops_multiplicative!(Fp6, Fp6);
+impl_binops_additive!(Fp6, Fp6, fff::Field);
+impl_binops_multiplicative!(Fp6, Fp6, fff::Field);
 
 impl Fp6 {
     /// Constructs an element of `Fp6`.
@@ -169,52 +169,9 @@ impl Fp6 {
 
     #[inline]
     pub fn mul(&self, rhs: &Fp6) -> Fp6 {
-        let mut a_a = self.c0();
-        let mut b_b = self.c1();
-        let mut c_c = self.c2();
-        a_a *= &rhs.c0();
-        b_b *= &rhs.c1();
-        c_c *= &rhs.c2();
-
-        let mut t1 = rhs.c1();
-        t1 += &rhs.c2();
-        {
-            let mut tmp = self.c1();
-            tmp += &self.c2();
-
-            t1 *= &tmp;
-            t1 -= &b_b;
-            t1 -= &c_c;
-            t1.mul_by_nonresidue();
-            t1 += &a_a;
-        }
-
-        let mut t3 = rhs.c0();
-        t3 += &rhs.c2();
-        {
-            let mut tmp = self.c0();
-            tmp += &self.c2();
-
-            t3 *= &tmp;
-            t3 -= &a_a;
-            t3 += &b_b;
-            t3 -= &c_c;
-        }
-
-        let mut t2 = rhs.c0();
-        t2 += &rhs.c1();
-        {
-            let mut tmp = self.c0();
-            tmp += &self.c1();
-
-            t2 *= &tmp;
-            t2 -= &a_a;
-            t2 -= &b_b;
-            c_c.mul_by_nonresidue();
-            t2 += &c_c;
-        }
-
-        Fp6::new(t1, t2, t3)
+        let mut out = *self;
+        fff::Field::mul_assign(&mut out, rhs);
+        out
     }
 
     pub fn c0(&self) -> Fp2 {
@@ -258,7 +215,9 @@ impl Field for Fp6 {
     }
 
     fn double(&mut self) {
-        *self += *self;
+        self.0.fp2[0] = (self.c0() + self.c0()).0;
+        self.0.fp2[1] = (self.c1() + self.c1()).0;
+        self.0.fp2[2] = (self.c2() + self.c2()).0;
     }
 
     fn negate(&mut self) {
@@ -266,11 +225,15 @@ impl Field for Fp6 {
     }
 
     fn add_assign(&mut self, other: &Self) {
-        *self += other;
+        self.0.fp2[0] = (self.c0() + other.c0()).0;
+        self.0.fp2[1] = (self.c1() + other.c1()).0;
+        self.0.fp2[2] = (self.c2() + other.c2()).0;
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        *self -= other;
+        self.0.fp2[0] = (self.c0() - other.c0()).0;
+        self.0.fp2[1] = (self.c1() - other.c1()).0;
+        self.0.fp2[2] = (self.c2() - other.c2()).0;
     }
 
     fn frobenius_map(&mut self, power: usize) {
@@ -327,7 +290,54 @@ impl Field for Fp6 {
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self *= other;
+        let mut a_a = self.c0();
+        let mut b_b = self.c1();
+        let mut c_c = self.c2();
+        a_a *= &other.c0();
+        b_b *= &other.c1();
+        c_c *= &other.c2();
+
+        let mut t1 = other.c1();
+        t1 += &other.c2();
+        {
+            let mut tmp = self.c1();
+            tmp += &self.c2();
+
+            t1 *= &tmp;
+            t1 -= &b_b;
+            t1 -= &c_c;
+            t1.mul_by_nonresidue();
+            t1 += &a_a;
+        }
+
+        let mut t3 = other.c0();
+        t3 += &other.c2();
+        {
+            let mut tmp = self.c0();
+            tmp += &self.c2();
+
+            t3 *= &tmp;
+            t3 -= &a_a;
+            t3 += &b_b;
+            t3 -= &c_c;
+        }
+
+        let mut t2 = other.c0();
+        t2 += &other.c1();
+        {
+            let mut tmp = self.c0();
+            tmp += &self.c1();
+
+            t2 *= &tmp;
+            t2 -= &a_a;
+            t2 -= &b_b;
+            c_c.mul_by_nonresidue();
+            t2 += &c_c;
+        }
+
+        self.0.fp2[0] = t1.0;
+        self.0.fp2[1] = t2.0;
+        self.0.fp2[2] = t3.0;
     }
 
     fn inverse(&self) -> Option<Self> {

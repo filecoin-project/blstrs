@@ -320,8 +320,8 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a Scalar {
     }
 }
 
-impl_binops_additive!(Scalar, Scalar);
-impl_binops_multiplicative!(Scalar, Scalar);
+impl_binops_additive!(Scalar, Scalar, fff::Field);
+impl_binops_multiplicative!(Scalar, Scalar, fff::Field);
 
 impl fff::Field for Scalar {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
@@ -356,29 +356,27 @@ impl fff::Field for Scalar {
     }
 
     fn square(&mut self) {
-        let mut raw = blst_fr::default();
-        unsafe { blst_fr_sqr(&mut raw, &self.0) }
-
-        self.0 = raw;
+        unsafe { blst_fr_sqr(&mut self.0, &self.0) }
     }
 
     fn double(&mut self) {
-        *self += *self;
+        unsafe { blst_fr_add(&mut self.0, &self.0, &self.0) }
     }
 
     fn negate(&mut self) {
         *self = -&*self;
     }
+
     fn add_assign(&mut self, other: &Self) {
-        *self += other;
+        unsafe { blst_fr_add(&mut self.0, &self.0, &other.0) };
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        *self -= other;
+        unsafe { blst_fr_sub(&mut self.0, &self.0, &other.0) };
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self *= other;
+        unsafe { blst_fr_mul(&mut self.0, &self.0, &other.0) };
     }
 
     fn inverse(&self) -> Option<Self> {
