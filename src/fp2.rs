@@ -129,8 +129,8 @@ impl<'a, 'b> Mul<&'b Fp2> for &'a Fp2 {
     }
 }
 
-impl_binops_additive!(Fp2, Fp2);
-impl_binops_multiplicative!(Fp2, Fp2);
+impl_binops_additive!(Fp2, Fp2, fff::Field);
+impl_binops_multiplicative!(Fp2, Fp2, fff::Field);
 
 impl Fp2 {
     /// Constructs an element of `Fp2`.
@@ -260,7 +260,7 @@ impl Field for Fp2 {
     }
 
     fn double(&mut self) {
-        *self += *self;
+        unsafe { blst_fp2_add(&mut self.0, &self.0, &self.0) };
     }
 
     fn negate(&mut self) {
@@ -268,15 +268,15 @@ impl Field for Fp2 {
     }
 
     fn add_assign(&mut self, other: &Self) {
-        *self = self.add(other);
+        unsafe { blst_fp2_add(&mut self.0, &self.0, &other.0) };
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        *self = self.sub(other);
+        unsafe { blst_fp2_sub(&mut self.0, &self.0, &other.0) };
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self = self.mul(other);
+        unsafe { blst_fp2_mul(&mut self.0, &self.0, &other.0) };
     }
 
     fn inverse(&self) -> Option<Self> {

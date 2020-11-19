@@ -110,8 +110,8 @@ impl<'a, 'b> Mul<&'b Fp12> for &'a Fp12 {
     }
 }
 
-impl_binops_additive!(Fp12, Fp12);
-impl_binops_multiplicative!(Fp12, Fp12);
+impl_binops_additive!(Fp12, Fp12, fff::Field);
+impl_binops_multiplicative!(Fp12, Fp12, fff::Field);
 
 impl Fp12 {
     /// Constructs an element of `Fp12`.
@@ -445,7 +445,8 @@ impl Field for Fp12 {
     }
 
     fn double(&mut self) {
-        *self += *self;
+        self.0.fp6[0] = (self.c0() + self.c0()).0;
+        self.0.fp6[1] = (self.c1() + self.c1()).0;
     }
 
     fn negate(&mut self) {
@@ -453,11 +454,13 @@ impl Field for Fp12 {
     }
 
     fn add_assign(&mut self, other: &Self) {
-        *self += other;
+        self.0.fp6[0] = (self.c0() + other.c0()).0;
+        self.0.fp6[1] = (self.c1() + other.c1()).0;
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        *self -= other;
+        self.0.fp6[0] = (self.c0() - other.c0()).0;
+        self.0.fp6[1] = (self.c1() - other.c1()).0;
     }
 
     fn frobenius_map(&mut self, power: usize) {
@@ -506,7 +509,7 @@ impl Field for Fp12 {
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self *= other;
+        unsafe { blst_fp12_mul(&mut self.0, &self.0, &other.0) };
     }
 
     fn inverse(&self) -> Option<Self> {

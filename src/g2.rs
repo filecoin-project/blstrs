@@ -145,7 +145,7 @@ where
     }
 }
 
-impl_binops_additive!(G2Projective, G2Affine);
+impl_binops_additive_mixed!(G2Projective, G2Affine, groupy::CurveProjective);
 impl_binops_additive_specify_output!(G2Affine, G2Projective, G2Projective);
 
 impl groupy::CurveAffine for G2Affine {
@@ -434,9 +434,23 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a G2Affine {
     }
 }
 
-impl_binops_additive!(G2Projective, G2Projective);
-impl_binops_multiplicative!(G2Projective, Scalar);
+impl_binops_additive!(G2Projective, G2Projective, groupy::CurveProjective);
+impl_binops_multiplicative_mixed!(G2Projective, Scalar, G2Projective);
 impl_binops_multiplicative_mixed!(G2Affine, Scalar, G2Projective);
+
+impl MulAssign<Scalar> for G2Projective {
+    #[inline]
+    fn mul_assign(&mut self, rhs: Scalar) {
+        *self = *self * rhs;
+    }
+}
+
+impl<'b> MulAssign<&'b Scalar> for G2Projective {
+    #[inline]
+    fn mul_assign(&mut self, rhs: &'b Scalar) {
+        *self = *self * rhs;
+    }
+}
 
 impl G2Projective {
     /// Serializes this element into compressed form.
@@ -610,19 +624,15 @@ impl groupy::CurveProjective for G2Projective {
     }
 
     fn double(&mut self) {
-        let mut out = blst_p2::default();
-
-        unsafe { blst_p2_double(&mut out, &self.0) };
-
-        self.0 = out;
+        unsafe { blst_p2_double(&mut self.0, &self.0) };
     }
 
     fn add_assign(&mut self, other: &Self) {
-        *self += other;
+        unsafe { blst_p2_add_or_double(&mut self.0, &self.0, &other.0) };
     }
 
     fn add_assign_mixed(&mut self, other: &Self::Affine) {
-        *self = self.add_mixed(other);
+        unsafe { blst_p2_add_or_double_affine(&mut self.0, &self.0, &other.0) };
     }
 
     fn negate(&mut self) {

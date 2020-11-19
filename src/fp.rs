@@ -572,8 +572,8 @@ impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
     }
 }
 
-impl_binops_additive!(Fp, Fp);
-impl_binops_multiplicative!(Fp, Fp);
+impl_binops_additive!(Fp, Fp, fff::Field);
+impl_binops_multiplicative!(Fp, Fp, fff::Field);
 
 impl fff::Field for Fp {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
@@ -626,22 +626,23 @@ impl fff::Field for Fp {
     }
 
     fn double(&mut self) {
-        *self += *self;
+        unsafe { blst_fp_add(&mut self.0, &self.0, &self.0) };
     }
 
     fn negate(&mut self) {
         *self = -&*self;
     }
+
     fn add_assign(&mut self, other: &Self) {
-        *self += other;
+        unsafe { blst_fp_add(&mut self.0, &self.0, &other.0) };
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        *self -= other;
+        unsafe { blst_fp_sub(&mut self.0, &self.0, &other.0) };
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        *self = self.mul(other)
+        unsafe { blst_fp_mul(&mut self.0, &self.0, &other.0) };
     }
 
     fn inverse(&self) -> Option<Self> {
