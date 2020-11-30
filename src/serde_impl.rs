@@ -1,5 +1,5 @@
-use std::fmt;
-use std::marker::PhantomData;
+use core::fmt;
+use core::marker::PhantomData;
 
 use fff::PrimeField;
 use groupy::{CurveAffine, CurveProjective, EncodedPoint};
@@ -226,7 +226,7 @@ mod tests {
     use super::*;
     use crate::Fp12;
 
-    use std::fmt::Debug;
+    use core::fmt::Debug;
 
     use fff::Field;
     use rand_core::SeedableRng;

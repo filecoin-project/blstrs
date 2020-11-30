@@ -26,7 +26,7 @@ impl fmt::Debug for Fp2 {
     }
 }
 
-impl std::fmt::Display for Fp2 {
+impl fmt::Display for Fp2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fq2({} + {} * u)", self.c0(), self.c1())
     }

@@ -4,7 +4,9 @@
 use blst::*;
 
 use core::{
-    cmp, fmt, mem,
+    cmp,
+    convert::TryInto,
+    fmt, mem,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use fff::{Field, PrimeField};
@@ -575,11 +577,11 @@ impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
 impl_binops_additive!(Fp, Fp, fff::Field);
 impl_binops_multiplicative!(Fp, Fp, fff::Field);
 
+/// The number of bits we should "shave" from a randomly sampled reputation.
+const REPR_SHAVE_BITS: usize = 384 - Fp::NUM_BITS as usize;
+
 impl fff::Field for Fp {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        // The number of bits we should "shave" from a randomly sampled reputation.
-        const REPR_SHAVE_BITS: usize = 384 - Fp::NUM_BITS as usize;
-
         loop {
             let mut raw = blst_fp::default();
             for i in 0..6 {
@@ -720,6 +722,19 @@ impl fff::PrimeField for Fp {
             1873798617647539866,
         ]))
         .unwrap()
+    }
+
+    fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
+        let mut repr = FpRepr::default();
+
+        for (limb, chunk) in repr.0.iter_mut().zip(bytes.chunks_exact(8)) {
+            *limb = u64::from_le_bytes(chunk.try_into().unwrap());
+        }
+
+        // Mask away the unused most-significant bits.
+        repr.0[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+        Fp::from_repr(repr).ok()
     }
 }
 

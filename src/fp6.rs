@@ -28,8 +28,8 @@ impl fmt::Debug for Fp6 {
     }
 }
 
-impl ::std::fmt::Display for Fp6 {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+impl fmt::Display for Fp6 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Fp6({} + {} * v, {} * v^2)",

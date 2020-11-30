@@ -647,7 +647,7 @@ impl groupy::CurveProjective for G2Projective {
         self.is_zero() || self.z() == Fp2::one()
     }
 
-    fn batch_normalization<S: std::borrow::BorrowMut<Self>>(v: &mut [S]) {
+    fn batch_normalization<S: core::borrow::BorrowMut<Self>>(v: &mut [S]) {
         for el in v {
             let el = el.borrow_mut();
             let mut tmp = blst_p2_affine::default();
