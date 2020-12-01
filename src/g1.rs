@@ -77,13 +77,7 @@ impl Neg for &G1Affine {
     #[inline]
     fn neg(self) -> G1Affine {
         let mut res = *self;
-
-        // Missing for affine in blst
-        if !self.is_zero() {
-            let mut y = res.y();
-            y.negate();
-            res.0.y = y.0;
-        }
+        res.negate();
 
         res
     }
@@ -174,7 +168,12 @@ impl groupy::CurveAffine for G1Affine {
     }
 
     fn negate(&mut self) {
-        *self = self.neg();
+        // Missing for affine in blst
+        if !self.is_zero() {
+            let mut y = self.y();
+            y.negate();
+            self.0.y = y.0;
+        }
     }
 
     fn into_projective(&self) -> Self::Projective {
@@ -410,9 +409,7 @@ impl<'a> Neg for &'a G1Projective {
     #[inline]
     fn neg(self) -> G1Projective {
         let mut out = *self;
-        const FLAG: usize = 0x1;
-
-        unsafe { blst_p1_cneg(&mut out.0, FLAG) }
+        out.negate();
 
         out
     }
@@ -663,7 +660,7 @@ impl groupy::CurveProjective for G1Projective {
     }
 
     fn negate(&mut self) {
-        *self = self.neg();
+        unsafe { blst_p1_cneg(&mut self.0, true) }
     }
 
     fn mul_assign<S: Into<<Self::Scalar as PrimeField>::Repr>>(&mut self, other: S) {

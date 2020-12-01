@@ -9,6 +9,7 @@ use core::{
 
 use blst::*;
 use fff::{Field, PrimeField, PrimeFieldRepr};
+use groupy::{CurveAffine, CurveProjective};
 use rand_core::RngCore;
 
 use crate::{Fp12, Fp2, G1Affine, Scalar, ScalarRepr};
@@ -74,16 +75,10 @@ impl Neg for &G2Affine {
 
     #[inline]
     fn neg(self) -> G2Affine {
-        let mut res = *self;
+        let mut out = *self;
+        out.negate();
 
-        // Missing for affine in blst
-        if !self.is_zero() {
-            let mut y = res.y();
-            y.negate();
-            res.0.y = y.0;
-        }
-
-        res
+        out
     }
 }
 
@@ -140,7 +135,6 @@ where
     where
         I: Iterator<Item = T>,
     {
-        use groupy::CurveProjective;
         iter.fold(Self::zero(), |acc, item| acc + item.borrow())
     }
 }
@@ -173,7 +167,12 @@ impl groupy::CurveAffine for G2Affine {
     }
 
     fn negate(&mut self) {
-        *self = self.neg();
+        // Missing for affine in blst
+        if !self.is_zero() {
+            let mut y = self.y();
+            y.negate();
+            self.0.y = y.0;
+        }
     }
 
     fn into_projective(&self) -> Self::Projective {
@@ -368,8 +367,6 @@ impl Eq for G2Projective {}
 impl PartialEq for G2Projective {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        use groupy::CurveProjective;
-
         let self_is_zero = self.is_zero();
         let other_is_zero = other.is_zero();
         (self_is_zero && other_is_zero)
@@ -383,9 +380,8 @@ impl<'a> Neg for &'a G2Projective {
     #[inline]
     fn neg(self) -> G2Projective {
         let mut out = *self;
-        const FLAG: usize = 0x1;
 
-        unsafe { blst_p2_cneg(&mut out.0, FLAG) }
+        out.negate();
 
         out
     }
@@ -636,7 +632,7 @@ impl groupy::CurveProjective for G2Projective {
     }
 
     fn negate(&mut self) {
-        *self = self.neg();
+        unsafe { blst_p2_cneg(&mut self.0, true) }
     }
 
     fn mul_assign<S: Into<<Self::Scalar as PrimeField>::Repr>>(&mut self, other: S) {

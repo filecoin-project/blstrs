@@ -630,7 +630,7 @@ impl fff::Field for Fp {
     }
 
     fn negate(&mut self) {
-        *self = -&*self;
+        unsafe { blst_fp_cneg(&mut self.0, &self.0, true) };
     }
 
     fn add_assign(&mut self, other: &Self) {
@@ -846,13 +846,10 @@ impl Fp {
 
     #[inline]
     pub fn neg(&self) -> Fp {
-        let mut out = blst_fp::default();
+        let mut out = *self;
+        out.negate();
 
-        const FLAG: usize = 0x1;
-
-        unsafe { blst_fp_cneg(&mut out, &self.0, FLAG) };
-
-        Fp(out)
+        out
     }
 
     #[inline]

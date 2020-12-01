@@ -149,13 +149,9 @@ impl Fp2 {
 
     #[inline]
     pub fn neg(&self) -> Fp2 {
-        let mut out = blst_fp2::default();
-
-        const FLAG: usize = 0x1;
-
-        unsafe { blst_fp2_cneg(&mut out, &self.0, FLAG) };
-
-        Fp2(out)
+        let mut out = *self;
+        out.negate();
+        out
     }
 
     #[inline]
@@ -264,7 +260,7 @@ impl Field for Fp2 {
     }
 
     fn negate(&mut self) {
-        *self = self.neg();
+        unsafe { blst_fp2_cneg(&mut self.0, &self.0, true) };
     }
 
     fn add_assign(&mut self, other: &Self) {

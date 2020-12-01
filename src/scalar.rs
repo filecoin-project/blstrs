@@ -274,13 +274,10 @@ impl<'a> Neg for &'a Scalar {
 
     #[inline]
     fn neg(self) -> Scalar {
-        let mut out = blst_fr::default();
+        let mut out = *self;
+        out.negate();
 
-        const FLAG: usize = 0x1;
-
-        unsafe { blst_fr_cneg(&mut out, &self.0, FLAG) };
-
-        Scalar(out)
+        out
     }
 }
 
@@ -364,7 +361,7 @@ impl fff::Field for Scalar {
     }
 
     fn negate(&mut self) {
-        *self = -&*self;
+        unsafe { blst_fr_cneg(&mut self.0, &self.0, true) };
     }
 
     fn add_assign(&mut self, other: &Self) {

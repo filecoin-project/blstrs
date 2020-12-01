@@ -14,7 +14,7 @@ readme = "README.md"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-blst = "0.3.1"
+blst = "=0.3.2"
 rand_core = "0.5.1"
 fff = "0.2.3"
 groupy = "0.3.1"
