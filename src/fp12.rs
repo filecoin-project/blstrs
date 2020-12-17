@@ -163,6 +163,104 @@ impl Fp12 {
     pub fn conjugate(&mut self) {
         unsafe { blst_fp12_conjugate(&mut self.0) };
     }
+
+    fn is_cyc(&self) -> bool {
+        // Check if a^(p^4 - p^2 + 1) == 1.
+        let mut t0 = *self;
+        t0.frobenius_map(4);
+        t0 *= self;
+        let mut t1 = *self;
+        t1.frobenius_map(2);
+
+        t0 == t1
+    }
+
+    fn back_cyc(&mut self) {
+        // t0 = g4^2
+        let mut t0 = self.c0().c1();
+        t0.square();
+        // t1 = 3 * g4^2 - 2 * g3
+        let mut t1 = t0 - self.c0().c2();
+        t1.double();
+        t1 += t0;
+        // t0 = E * g5^2 + t1
+        let mut t2 = self.c1().c2();
+        t2.square();
+        let mut t0 = t2;
+        t0.mul_by_nonresidue();
+        t0 += t1;
+        // t1 = 1/(4 * g2)
+        let mut t1 = self.c1().c0();
+        t1.double();
+        t1.double();
+        t1 = t1.inverse().unwrap();
+        // c_1 = g1
+        self.0.fp6[1].fp2[1] = (t0 * t1).into();
+
+        // t1 = g3 * g4
+        let t1 = self.c0().c2() * self.c0().c1();
+        // t2 = 2 * g1^2 - 3 * g3 * g4
+        let mut t2 = self.c1().c1();
+        t2.square();
+        t2 -= t1;
+        t2.double();
+        t2 -= t1;
+        // t1 = g2 * g5
+        let t1 = self.c1().c0() * self.c1().c2();
+        // c_0 = E * (2 * g1^2 + g2 * g5 - 3 * g3 * g4) + 1
+        t2 += t1;
+        t2.mul_by_nonresidue();
+        self.0.fp6[0].fp2[0] = t2.into();
+        self.0.fp6[0].fp2[0].fp[0] = (self.c0().c0().c0() + &Into::<Fp>::into(1)).0;
+    }
+
+    /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
+    pub fn compress(&self) -> Option<Fp12Compressed> {
+        if !self.is_cyc() {
+            return None;
+        }
+
+        let c0 = self.c0();
+        let c1 = self.c1();
+
+        Some(Fp12Compressed {
+            c0: [c0.c1(), c0.c2()],
+            c1: [c1.c0(), c1.c2()],
+        })
+    }
+}
+
+/// Compressed representation of `Fp12`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Fp12Compressed {
+    c0: [Fp2; 2],
+    c1: [Fp2; 2],
+}
+
+impl fmt::Debug for Fp12Compressed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Fp12Compressed")
+            .field("c0", &self.c0)
+            .field("c1", &self.c1)
+            .finish()
+    }
+}
+
+impl Fp12Compressed {
+    /// Uncompress the given Fp12 element, returns `None` if the element is an invalid compression
+    /// format.
+    pub fn uncompress(self) -> Option<Fp12> {
+        let mut tmp = Fp12::new(
+            Fp6::new(Fp2::zero(), self.c0[0], self.c0[1]),
+            Fp6::new(self.c1[0], Fp2::zero(), self.c1[1]),
+        );
+        tmp.back_cyc();
+        if tmp.is_cyc() {
+            return Some(tmp);
+        }
+
+        None
+    }
 }
 
 // non_residue^((modulus^i-1)/6) for i=0,...,11
@@ -526,9 +624,12 @@ impl Field for Fp12 {
 
 #[cfg(test)]
 mod tests {
-    use super::Fp12;
+    use crate::{Fp12, G1Projective, G2Projective};
 
     use fff::{Field, PrimeField};
+    use groupy::CurveProjective;
+    use rand_core::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
     #[test]
     fn test_fp12_eq() {
@@ -545,5 +646,34 @@ mod tests {
     #[test]
     fn fp12_random_field_tests() {
         crate::tests::field::random_field_tests::<Fp12>();
+    }
+
+    #[test]
+    fn fp12_compression() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        for i in 0..100 {
+            let a = Fp12::random(&mut rng);
+            // usually not cyclomatic, so not compressable
+            if let Some(b) = a.compress() {
+                let c = b.uncompress().unwrap();
+                assert_eq!(a, c, "{}", i);
+            } else {
+                println!("skipping {}", i);
+            }
+
+            // pairing result, should be compressable
+            let p = G1Projective::random(&mut rng).into_affine();
+            let q = G2Projective::random(&mut rng).into_affine();
+            let a = crate::pairing(p, q);
+            assert!(a.is_cyc());
+
+            let b = a.compress().unwrap();
+            let c = b.uncompress().unwrap();
+            assert_eq!(a, c, "{}", i);
+        }
     }
 }
