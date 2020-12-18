@@ -50,6 +50,12 @@ impl From<Fp2> for blst_fp2 {
     }
 }
 
+impl From<u64> for Fp2 {
+    fn from(val: u64) -> Fp2 {
+        Fp2::new(Fp::from(val), Fp::zero())
+    }
+}
+
 impl Default for Fp2 {
     fn default() -> Self {
         Fp2::zero()

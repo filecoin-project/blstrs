@@ -228,6 +228,21 @@ impl Fp12 {
             c1: [c1.c0(), c1.c2()],
         })
     }
+
+    pub fn compress2(&self) -> Option<Fp12Compressed2> {
+        if !self.is_cyc() {
+            return None;
+        }
+
+        // Use torus-based compression from Section 4.1 in
+        // "On Compressible Pairings and Their Computation" by Naehrig et al.
+        let mut c0 = self.c0();
+
+        c0.0.fp2[0] = (c0.c0() + &Fp2::from(1)).0;
+        let b = c0 * self.c1().inverse().unwrap();
+
+        Some(Fp12Compressed2(b))
+    }
 }
 
 /// Compressed representation of `Fp12`.
@@ -257,6 +272,38 @@ impl Fp12Compressed {
         tmp.back_cyc();
         if tmp.is_cyc() {
             return Some(tmp);
+        }
+
+        None
+    }
+}
+
+/// Compressed representation of `Fp12`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Fp12Compressed2(Fp6);
+
+impl fmt::Debug for Fp12Compressed2 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Fp12Compressed2")
+            .field("c0", &self.0)
+            .finish()
+    }
+}
+
+impl Fp12Compressed2 {
+    /// Uncompress the given Fp12 element, returns `None` if the element is an invalid compression
+    /// format.
+    pub fn uncompress(self) -> Option<Fp12> {
+        // Formula for decompression for the odd q case from Section 2 in
+        // "Compression in finite fields and torus-based cryptography" by
+        // Rubin-Silverberg.
+        let fp6_neg_one = Fp6::from(1).neg();
+        let t = Fp12::new(self.0, fp6_neg_one).inverse().unwrap();
+        let mut c = Fp12::new(self.0, Fp6::from(1));
+        c *= t;
+
+        if c.is_cyc() {
+            return Some(c);
         }
 
         None
@@ -563,10 +610,7 @@ impl Field for Fp12 {
 
     fn frobenius_map(&mut self, power: usize) {
         // TODO: switch to blst version when it matches
-        // let mut out = blst_fp12::default();
         // unsafe { blst_fp12_frobenius_map(&mut out, &self.0, power) }
-
-        // self.0 = out;
 
         let mut c0 = self.c0();
         c0.frobenius_map(power);
@@ -672,6 +716,35 @@ mod tests {
             assert!(a.is_cyc());
 
             let b = a.compress().unwrap();
+            let c = b.uncompress().unwrap();
+            assert_eq!(a, c, "{}", i);
+        }
+    }
+
+    #[test]
+    fn fp12_compression2() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        for i in 0..100 {
+            let a = Fp12::random(&mut rng);
+            // usually not cyclomatic, so not compressable
+            if let Some(b) = a.compress2() {
+                let c = b.uncompress().unwrap();
+                assert_eq!(a, c, "{}", i);
+            } else {
+                println!("skipping {}", i);
+            }
+
+            // pairing result, should be compressable
+            let p = G1Projective::random(&mut rng).into_affine();
+            let q = G2Projective::random(&mut rng).into_affine();
+            let a = crate::pairing(p, q);
+            assert!(a.is_cyc());
+
+            let b = a.compress2().unwrap();
             let c = b.uncompress().unwrap();
             assert_eq!(a, c, "{}", i);
         }

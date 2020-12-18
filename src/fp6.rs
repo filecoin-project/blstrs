@@ -64,6 +64,12 @@ impl From<Fp6> for blst_fp6 {
     }
 }
 
+impl From<u64> for Fp6 {
+    fn from(val: u64) -> Fp6 {
+        Fp6::from(Fp2::from(val))
+    }
+}
+
 impl Default for Fp6 {
     fn default() -> Self {
         Fp6::zero()
