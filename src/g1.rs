@@ -63,6 +63,18 @@ impl From<G1Projective> for G1Affine {
     }
 }
 
+impl AsRef<blst_p1_affine> for G1Affine {
+    fn as_ref(&self) -> &blst_p1_affine {
+        &self.0
+    }
+}
+
+impl AsMut<blst_p1_affine> for G1Affine {
+    fn as_mut(&mut self) -> &mut blst_p1_affine {
+        &mut self.0
+    }
+}
+
 impl Eq for G1Affine {}
 impl PartialEq for G1Affine {
     #[inline]
@@ -377,6 +389,18 @@ impl fmt::Display for G1Projective {
     }
 }
 
+impl AsRef<blst_p1> for G1Projective {
+    fn as_ref(&self) -> &blst_p1 {
+        &self.0
+    }
+}
+
+impl AsMut<blst_p1> for G1Projective {
+    fn as_mut(&mut self) -> &mut blst_p1 {
+        &mut self.0
+    }
+}
+
 impl From<&G1Affine> for G1Projective {
     fn from(p: &G1Affine) -> G1Projective {
         let mut out = blst_p1::default();
@@ -591,6 +615,23 @@ impl G1Projective {
     /// Returns the z coordinate.
     pub fn z(&self) -> Fp {
         Fp(self.0.z)
+    }
+
+    /// Hash to curve algorithm.
+    pub fn hash_to_curve(msg: &[u8], dst: &[u8], aug: &[u8]) -> Self {
+        let mut res = Self::zero();
+        unsafe {
+            blst_hash_to_g1(
+                &mut res.0,
+                msg.as_ptr(),
+                msg.len(),
+                dst.as_ptr(),
+                dst.len(),
+                aug.as_ptr(),
+                aug.len(),
+            );
+        }
+        res
     }
 }
 
