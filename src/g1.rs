@@ -220,7 +220,7 @@ impl G1Affine {
     /// Attempts to deserialize an uncompressed element.
     pub fn from_uncompressed(bytes: &[u8; 96]) -> Option<Self> {
         G1Affine::from_uncompressed_unchecked(bytes).and_then(|el| {
-            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
+            if el.is_zero() || el.is_torsion_free() {
                 Some(el)
             } else {
                 None
@@ -248,7 +248,7 @@ impl G1Affine {
     /// Attempts to deserialize a compressed element.
     pub fn from_compressed(bytes: &[u8; 48]) -> Option<Self> {
         G1Affine::from_compressed_unchecked(bytes).and_then(|el| {
-            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
+            if el.is_zero() || el.is_torsion_free() {
                 Some(el)
             } else {
                 None
