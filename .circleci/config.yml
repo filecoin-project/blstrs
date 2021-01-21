@@ -1,0 +1,172 @@
+version: 2.1
+
+parameters:
+  nightly-version:
+    type: string
+    default: "nightly-2021-01-21"
+
+orbs:
+  codecov: codecov/codecov@1
+
+executors:
+  default:
+    docker:
+      - image: filecoin/rust:latest
+    working_directory: /mnt/crate
+    resource_class: 2xlarge
+
+restore-workspace: &restore-workspace
+  attach_workspace:
+    at: /mnt
+
+restore-cache: &restore-cache
+  restore_cache:
+    keys:
+      - cargo-v3-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+      - repo-source-{{ .Branch }}-{{ .Revision }}
+
+jobs:
+  cargo_fetch:
+    executor: default
+    steps:
+      - checkout
+      - run:
+          name: Calculate dependencies
+          command: cargo generate-lockfile
+      - restore_cache:
+          keys:
+            - cargo-v3-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+      - run: cargo update
+      - run: cargo fetch
+      - run: rm -rf ~/.rustup
+      - run: rustup self update
+      - run: rustup install stable
+      - run: rustup default stable
+      # A nightly build is needed for code coverage reporting
+      - run: rustup toolchain install --profile minimal << pipeline.parameters.nightly-version >>
+      - run: rustup component add --toolchain << pipeline.parameters.nightly-version >> llvm-tools-preview
+      - run: rustc --version
+      - run: rm -rf .git
+      - persist_to_workspace:
+          root: /mnt
+          paths:
+            - crate
+      - save_cache:
+          key: cargo-v3-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+          paths:
+            - "~/.cargo"
+            - "~/.rustup"
+
+  rustfmt:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo fmt
+          command: cargo fmt --all -- --check
+
+  clippy:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo clippy
+          command: cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+  build:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo build
+          command: cargo build --all-features --workspace
+
+  test:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo test
+          command: cargo test --all-features --workspace
+
+  bench:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo bench
+          command: cargo +<< pipeline.parameters.nightly-version >> bench
+
+  coverage_run:
+    executor: default
+    environment:
+      # Incremental build is not supported when profiling
+      CARGO_INCREMENTAL: 0
+      # -Zinstrument-coverage: enable llvm coverage instrumentation
+      # -Ccodegen-units=1: building in parallel is not supported when profiling
+      # -Copt-level=0: disable optimizations for more accurate coverage
+      # -Clink-dead-code: dead code should be considered as not covered code
+      # -Coverflow-checks=off: checking for overflow is not needed for coverage reporting
+      # -Cinline-threshold=0: do not inline
+      RUSTFLAGS: -Zinstrument-coverage -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Cinline-threshold=0
+      # Make sure that each run of an executable creates a new profile file, with the default
+      # name they would override each other
+      LLVM_PROFILE_FILE: "%m.profraw"
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Set the PATH env variable
+          command: |
+            # Also put the Rust LLVM tools into the PATH.
+            echo 'export PATH="~/.rustup/toolchains/<< pipeline.parameters.nightly-version >>-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin:$PATH"' | tee --append $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Generate coverage report
+          command: |
+            RUST_LOG=info cargo +<< pipeline.parameters.nightly-version >> test -- --nocapture
+
+            # Do *not* use sparse output. It leads to more lines that are not
+            # taken into account at all
+            llvm-profdata merge --output=default.profdata ./*.profraw
+
+            # The compiled files contain the coverage information. From running the tests we don't
+            # know what those files are called, hence use all files from the `./target/debug/deps`
+            # directory which don't have an extension.
+            OBJECT_FILES=$(find ./target/debug/deps/* -name '*' -not -name '*\.*' -printf '%p,'|head --bytes -1)
+            # Only export the coverage of this project, we don't care about coverage of
+            # dependencies
+            llvm-cov export --ignore-filename-regex=".cargo|.rustup" --format=lcov -instr-profile=default.profdata --object=${OBJECT_FILES} > lcov.info
+      # Codecov automatically merges the reports in case there are several ones uploaded
+      - codecov/upload:
+          file: lcov.info
+
+workflows:
+  version: 2.1
+
+  test:
+    jobs:
+      - cargo_fetch
+      - rustfmt:
+          requires:
+            - cargo_fetch
+      - clippy:
+          requires:
+            - cargo_fetch
+      - build:
+          requires:
+            - cargo_fetch
+      - bench:
+          requires:
+            - cargo_fetch
+      - test:
+          requires:
+            - cargo_fetch
+      - coverage_run:
+          requires:
+            - cargo_fetch
