@@ -1631,7 +1631,7 @@ mod tests {
                     0x3f69cc3a3d07d58b,
                     0xb972455fd09b8ef,
                 ]
-            }) * &Fp(blst::blst_fp {
+            }) * Fp(blst::blst_fp {
                 l: [
                     0x329300000030ffcf,
                     0x633c00c02cc40028,

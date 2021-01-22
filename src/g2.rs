@@ -783,6 +783,8 @@ impl fmt::Debug for G2Compressed {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::eq_op)]
+
     use crate::{Fp, Fp2, FpRepr, G2Affine, G2Projective};
     use fff::{Field, PrimeField};
     use groupy::CurveProjective;
