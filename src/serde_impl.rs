@@ -34,7 +34,7 @@ impl Serialize for G1Affine {
 
 impl<'de> Deserialize<'de> for G1Affine {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(deserialize_affine(d)?)
+        deserialize_affine(d)
     }
 }
 
@@ -58,7 +58,7 @@ impl Serialize for G2Affine {
 
 impl<'de> Deserialize<'de> for G2Affine {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(deserialize_affine(d)?)
+        deserialize_affine(d)
     }
 }
 
