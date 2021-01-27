@@ -14,7 +14,7 @@ readme = "README.md"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-blst = "0.2.0"
+blst = { version = "0.2.0", default-features = true }
 rand_core = "0.5.1"
 fff = "0.2.3"
 groupy = "0.3.1"
@@ -27,4 +27,4 @@ hex = "0.4.2"
 
 [features]
 default = []
-
+portable = ["blst/portable"]
