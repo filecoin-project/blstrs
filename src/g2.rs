@@ -294,10 +294,8 @@ impl G2Affine {
     }
 
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {
-        let mut raw = blst_p2_affine::default();
-        raw.x = x.0;
-        raw.y = y.0;
         // FIXME: what about infinity?
+        let raw = blst_p2_affine { x: x.0, y: y.0 };
 
         G2Affine(raw)
     }
@@ -539,10 +537,11 @@ impl G2Projective {
     }
 
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, z: Fp2) -> Self {
-        let mut raw = blst_p2::default();
-        raw.x = x.0;
-        raw.y = y.0;
-        raw.z = z.0;
+        let raw = blst_p2 {
+            x: x.0,
+            y: y.0,
+            z: z.0,
+        };
 
         G2Projective(raw)
     }
@@ -784,6 +783,8 @@ impl fmt::Debug for G2Compressed {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::eq_op)]
+
     use crate::{Fp, Fp2, FpRepr, G2Affine, G2Projective};
     use fff::{Field, PrimeField};
     use groupy::CurveProjective;

@@ -34,7 +34,7 @@ impl Serialize for G1Affine {
 
 impl<'de> Deserialize<'de> for G1Affine {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(deserialize_affine(d)?)
+        deserialize_affine(d)
     }
 }
 
@@ -58,7 +58,7 @@ impl Serialize for G2Affine {
 
 impl<'de> Deserialize<'de> for G2Affine {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(deserialize_affine(d)?)
+        deserialize_affine(d)
     }
 }
 
@@ -154,8 +154,8 @@ struct Fp12Ser {
 impl Serialize for Fp2 {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         Fp2Ser {
-            c0: self.c0().into(),
-            c1: self.c1().into(),
+            c0: self.c0(),
+            c1: self.c1(),
         }
         .serialize(s)
     }
@@ -164,8 +164,8 @@ impl Serialize for Fp2 {
 impl Serialize for Fp12 {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         Fp12Ser {
-            c0: self.c0().into(),
-            c1: self.c1().into(),
+            c0: self.c0(),
+            c1: self.c1(),
         }
         .serialize(s)
     }
@@ -174,9 +174,9 @@ impl Serialize for Fp12 {
 impl Serialize for Fp6 {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         Fp6Ser {
-            c0: self.c0().into(),
-            c1: self.c1().into(),
-            c2: self.c2().into(),
+            c0: self.c0(),
+            c1: self.c1(),
+            c2: self.c2(),
         }
         .serialize(s)
     }
