@@ -40,6 +40,18 @@ impl fmt::Display for G2Affine {
     }
 }
 
+impl AsRef<blst_p2_affine> for G2Affine {
+    fn as_ref(&self) -> &blst_p2_affine {
+        &self.0
+    }
+}
+
+impl AsMut<blst_p2_affine> for G2Affine {
+    fn as_mut(&mut self) -> &mut blst_p2_affine {
+        &mut self.0
+    }
+}
+
 impl Default for G2Affine {
     fn default() -> G2Affine {
         G2Affine::zero()
@@ -221,7 +233,7 @@ impl G2Affine {
     /// Attempts to deserialize an uncompressed element.
     pub fn from_uncompressed(bytes: &[u8; 192]) -> Option<Self> {
         G2Affine::from_uncompressed_unchecked(bytes).and_then(|el| {
-            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
+            if el.is_zero() || el.is_torsion_free() {
                 Some(el)
             } else {
                 None
@@ -251,7 +263,7 @@ impl G2Affine {
     /// Attempts to deserialize a compressed element.
     pub fn from_compressed(bytes: &[u8; 96]) -> Option<Self> {
         G2Affine::from_compressed_unchecked(bytes).and_then(|el| {
-            if el.is_zero() || (el.is_torsion_free() && el.is_on_curve()) {
+            if el.is_zero() || el.is_torsion_free() {
                 Some(el)
             } else {
                 None
@@ -342,6 +354,18 @@ impl fmt::Debug for G2Projective {
 impl fmt::Display for G2Projective {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", G2Affine::from(self))
+    }
+}
+
+impl AsRef<blst_p2> for G2Projective {
+    fn as_ref(&self) -> &blst_p2 {
+        &self.0
+    }
+}
+
+impl AsMut<blst_p2> for G2Projective {
+    fn as_mut(&mut self) -> &mut blst_p2 {
+        &mut self.0
     }
 }
 
@@ -559,6 +583,23 @@ impl G2Projective {
     /// Returns the z coordinate.
     pub fn z(&self) -> Fp2 {
         Fp2(self.0.z)
+    }
+
+    /// Hash to curve algorithm.
+    pub fn hash_to_curve(msg: &[u8], dst: &[u8], aug: &[u8]) -> Self {
+        let mut res = Self::zero();
+        unsafe {
+            blst_hash_to_g2(
+                &mut res.0,
+                msg.as_ptr(),
+                msg.len(),
+                dst.as_ptr(),
+                dst.len(),
+                aug.as_ptr(),
+                aug.len(),
+            );
+        }
+        res
     }
 }
 
