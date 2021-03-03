@@ -46,6 +46,7 @@ impl AsMut<blst_fr> for Scalar {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<blst_scalar> for Scalar {
     fn into(self) -> blst_scalar {
         let mut out = blst_scalar::default();
