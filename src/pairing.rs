@@ -117,3 +117,27 @@ impl_pairing!(
     blst_pairing_aggregate_pk_in_g2,
     blst_aggregated_in_g1
 );
+
+/// Returns true if all provided messages are distinctly unique, false otherwise.
+pub fn unique_messages(msgs: &[&[u8]]) -> bool {
+    let n_elems = msgs.len();
+
+    if n_elems == 1 {
+        return true;
+    } else if n_elems == 2 {
+        return msgs[0] != msgs[1];
+    }
+
+    let mut v: Vec<u64> = vec![0; unsafe { blst_uniq_sizeof(n_elems) } / 8];
+    let ctx = v.as_mut_ptr() as *mut blst_uniq;
+
+    unsafe { blst_uniq_init(ctx) };
+
+    for msg in msgs.iter() {
+        if !unsafe { blst_uniq_test(ctx, msg.as_ptr(), msg.len()) } {
+            return false;
+        }
+    }
+
+    true
+}
