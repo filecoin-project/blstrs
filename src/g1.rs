@@ -582,7 +582,7 @@ impl G1Projective {
         let mut scalar = blst_scalar::default();
         unsafe {
             blst_scalar_from_uint64(&mut scalar, by.0.as_ptr());
-            blst_p1_mult(&mut out, &self.0, &scalar, NBITS)
+            blst_p1_mult(&mut out, &self.0, scalar.b.as_ptr(), NBITS)
         };
 
         G1Projective(out)
