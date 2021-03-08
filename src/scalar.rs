@@ -34,6 +34,30 @@ impl AsMut<[u64]> for ScalarRepr {
     }
 }
 
+impl AsRef<blst_fr> for Scalar {
+    fn as_ref(&self) -> &blst_fr {
+        &self.0
+    }
+}
+
+impl AsMut<blst_fr> for Scalar {
+    fn as_mut(&mut self) -> &mut blst_fr {
+        &mut self.0
+    }
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<blst_scalar> for Scalar {
+    fn into(self) -> blst_scalar {
+        let mut out = blst_scalar::default();
+        unsafe {
+            blst_scalar_from_fr(&mut out, &self.0);
+        }
+
+        out
+    }
+}
+
 const LIMBS: usize = 4;
 const LIMB_BITS: usize = 64;
 

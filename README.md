@@ -13,6 +13,10 @@ Due to the assembly based nature of the implementation in `blst`, currently only
 - `x86_64`,
 - `aarch64`.
 
+## BLST Portability
+
+To enable portable features when building the blst dependency, use the 'portable' feature: `--features portable`.
+
 ## BLS12 Parameterization
 
 BLS12 curves are parameterized by a value *x* such that the base field modulus *q* and subgroup *r* can be computed by:
