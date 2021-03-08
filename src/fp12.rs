@@ -310,6 +310,23 @@ impl Fp12Compressed2 {
     }
 }
 
+impl crate::traits::Compress for Fp12 {
+    fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
+        let c = self.compress2().unwrap();
+
+        out.write_all(&c.0.c0().c0().to_bytes_le())?;
+        out.write_all(&c.0.c0().c1().to_bytes_le())?;
+
+        out.write_all(&c.0.c1().c0().to_bytes_le())?;
+        out.write_all(&c.0.c1().c1().to_bytes_le())?;
+
+        out.write_all(&c.0.c2().c0().to_bytes_le())?;
+        out.write_all(&c.0.c2().c1().to_bytes_le())?;
+
+        Ok(())
+    }
+}
+
 // non_residue^((modulus^i-1)/6) for i=0,...,11
 const FROBENIUS_COEFF_FP12_C1: [blst_fp2; 12] = [
     // Fp2(u + 1)**(((q^0) - 1) / 6)
