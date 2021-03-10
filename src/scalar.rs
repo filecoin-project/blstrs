@@ -694,6 +694,16 @@ impl Scalar {
     }
 }
 
+impl crate::traits::Compress for Scalar {
+    fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
+        let c = self.to_bytes_le();
+
+        out.write_all(&c)?;
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Scalar, ScalarRepr, MODULUS, R};
