@@ -1,8 +1,10 @@
 use fff::{Field, PrimeField, ScalarEngine, SqrtField};
 use groupy::{CurveAffine, CurveProjective};
 
-pub trait Compress {
+pub trait Compress: Sized {
     fn write_compressed<W: std::io::Write>(self, out: W) -> std::io::Result<()>;
+
+    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self>;
 }
 
 // An "engine" is a collection of types (fields, elliptic curve groups, etc.)

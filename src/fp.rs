@@ -919,6 +919,10 @@ impl crate::traits::Compress for Fp {
 
         Ok(())
     }
+
+    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self> {
+        todo!()
+    }
 }
 
 #[cfg(test)]

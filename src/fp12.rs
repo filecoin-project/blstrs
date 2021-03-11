@@ -325,6 +325,33 @@ impl crate::traits::Compress for Fp12 {
 
         Ok(())
     }
+
+    fn read_compressed<R: std::io::Read>(mut source: R) -> std::io::Result<Self> {
+        let mut buffer = [0u8; 48];
+        let read_fp = |source: &mut dyn std::io::Read, buffer: &mut [u8; 48]| {
+            source.read_exact(buffer)?;
+            let fp = Fp::from_bytes_le(buffer);
+            fp.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid fp"))
+        };
+
+        let x0 = read_fp(&mut source, &mut buffer)?;
+        let x1 = read_fp(&mut source, &mut buffer)?;
+
+        let y0 = read_fp(&mut source, &mut buffer)?;
+        let y1 = read_fp(&mut source, &mut buffer)?;
+
+        let z0 = read_fp(&mut source, &mut buffer)?;
+        let z1 = read_fp(&mut source, &mut buffer)?;
+
+        let x = Fp2::new(x0, x1);
+        let y = Fp2::new(y0, y1);
+        let z = Fp2::new(z0, z1);
+
+        let compressed = Fp12Compressed2(Fp6::new(x, y, z));
+        compressed.uncompress().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid compression point")
+        })
+    }
 }
 
 // non_residue^((modulus^i-1)/6) for i=0,...,11
@@ -740,6 +767,8 @@ mod tests {
 
     #[test]
     fn fp12_compression2() {
+        use crate::traits::Compress;
+
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
@@ -764,6 +793,11 @@ mod tests {
             let b = a.compress2().unwrap();
             let c = b.uncompress().unwrap();
             assert_eq!(a, c, "{}", i);
+
+            let mut buffer = Vec::new();
+            a.write_compressed(&mut buffer).unwrap();
+            let out = Fp12::read_compressed(std::io::Cursor::new(buffer)).unwrap();
+            assert_eq!(a, out);
         }
     }
 }
