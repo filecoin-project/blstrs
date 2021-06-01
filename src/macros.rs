@@ -206,18 +206,18 @@ macro_rules! encoded_point_delegations {
         }
         impl Eq for $t {}
         impl PartialOrd for $t {
-            fn partial_cmp(&self, other: &$t) -> Option<::std::cmp::Ordering> {
+            fn partial_cmp(&self, other: &$t) -> Option<::core::cmp::Ordering> {
                 PartialOrd::partial_cmp(&self.0[..], &other.0[..])
             }
         }
         impl Ord for $t {
-            fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+            fn cmp(&self, other: &Self) -> ::core::cmp::Ordering {
                 Ord::cmp(&self.0[..], &other.0[..])
             }
         }
 
-        impl ::std::hash::Hash for $t {
-            fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+        impl ::core::hash::Hash for $t {
+            fn hash<H: ::core::hash::Hasher>(&self, state: &mut H) {
                 self.0[..].hash(state);
             }
         }

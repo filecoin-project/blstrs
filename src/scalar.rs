@@ -344,11 +344,11 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a Scalar {
 impl_binops_additive!(Scalar, Scalar, fff::Field);
 impl_binops_multiplicative!(Scalar, Scalar, fff::Field);
 
+/// The number of bits we should "shave" from a randomly sampled reputation.
+const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
+
 impl fff::Field for Scalar {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        // The number of bits we should "shave" from a randomly sampled reputation.
-        const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
-
         loop {
             let mut raw = blst_fr::default();
             for i in 0..4 {
@@ -465,6 +465,19 @@ impl fff::PrimeField for Scalar {
                 0x5bf3adda19e9b27b,
             ],
         })
+    }
+
+    fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
+        let mut repr = ScalarRepr::default();
+
+        for (limb, chunk) in repr.0.iter_mut().zip(bytes.chunks_exact(8)) {
+            *limb = u64::from_le_bytes(chunk.try_into().unwrap());
+        }
+
+        // Mask away the unused most-significant bits.
+        repr.0[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+        Scalar::from_repr(repr).ok()
     }
 }
 
@@ -1077,7 +1090,7 @@ mod tests {
     fn test_scalar_repr_ordering() {
         fn assert_equality(a: ScalarRepr, b: ScalarRepr) {
             assert_eq!(a, b);
-            assert!(a.cmp(&b) == ::std::cmp::Ordering::Equal);
+            assert!(a.cmp(&b) == core::cmp::Ordering::Equal);
         }
 
         fn assert_lt(a: ScalarRepr, b: ScalarRepr) {

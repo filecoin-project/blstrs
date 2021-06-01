@@ -1,6 +1,12 @@
 use fff::{Field, PrimeField, ScalarEngine, SqrtField};
 use groupy::{CurveAffine, CurveProjective};
 
+/// This traits enables reading and writing a compressed version.
+pub trait Compress: Sized {
+    fn write_compressed<W: std::io::Write>(self, out: W) -> std::io::Result<()>;
+    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self>;
+}
+
 // An "engine" is a collection of types (fields, elliptic curve groups, etc.)
 /// with well-defined relationships. In particular, the G1/G2 curve groups are
 /// of prime order `r`, and are equipped with a bilinear pairing function.
@@ -40,7 +46,7 @@ pub trait Engine: ScalarEngine {
     type Fqe: SqrtField;
 
     /// The extension field that hosts the target group of the pairing.
-    type Fqk: Field;
+    type Fqk: Field + Compress;
 
     /// Perform a miller loop with some number of (G1, G2) pairs.
     fn miller_loop<'a, I>(i: I) -> Self::Fqk

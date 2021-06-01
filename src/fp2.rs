@@ -26,7 +26,7 @@ impl fmt::Debug for Fp2 {
     }
 }
 
-impl std::fmt::Display for Fp2 {
+impl fmt::Display for Fp2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fq2({} + {} * u)", self.c0(), self.c1())
     }
@@ -47,6 +47,12 @@ impl From<blst_fp2> for Fp2 {
 impl From<Fp2> for blst_fp2 {
     fn from(val: Fp2) -> blst_fp2 {
         val.0
+    }
+}
+
+impl From<u64> for Fp2 {
+    fn from(val: u64) -> Fp2 {
+        Fp2::new(Fp::from(val), Fp::zero())
     }
 }
 
