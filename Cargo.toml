@@ -16,8 +16,8 @@ rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 [dependencies]
 blst = { version = "=0.3.3", default-features = true }
 rand_core = "0.5.1"
-fff = "0.3"
-groupy = "0.4"
+fff = "0.3.0"
+groupy = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
