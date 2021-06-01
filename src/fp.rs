@@ -913,18 +913,6 @@ impl Fp {
     }
 }
 
-impl crate::traits::Compress for Fp {
-    fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
-        out.write_all(&self.to_bytes_le())?;
-
-        Ok(())
-    }
-
-    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self> {
-        todo!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{Fp, FpRepr};
