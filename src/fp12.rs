@@ -185,7 +185,7 @@ impl Fp12 {
         // "On Compressible Pairings and Their Computation" by Naehrig et al.
         let mut c0 = self.c0();
 
-        c0.0.fp2[0] = (c0.c0() + &Fp2::from(1)).0;
+        c0.0.fp2[0] = (c0.c0() + Fp2::from(1)).0;
         let b = c0 * self.c1().inverse().unwrap();
 
         Some(Fp12Compressed(b))
