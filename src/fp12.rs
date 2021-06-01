@@ -175,61 +175,8 @@ impl Fp12 {
         t0 == t1
     }
 
-    fn back_cyc(&mut self) {
-        // t0 = g4^2
-        let mut t0 = self.c0().c1();
-        t0.square();
-        // t1 = 3 * g4^2 - 2 * g3
-        let mut t1 = t0 - self.c0().c2();
-        t1.double();
-        t1 += t0;
-        // t0 = E * g5^2 + t1
-        let mut t2 = self.c1().c2();
-        t2.square();
-        let mut t0 = t2;
-        t0.mul_by_nonresidue();
-        t0 += t1;
-        // t1 = 1/(4 * g2)
-        let mut t1 = self.c1().c0();
-        t1.double();
-        t1.double();
-        t1 = t1.inverse().unwrap();
-        // c_1 = g1
-        self.0.fp6[1].fp2[1] = (t0 * t1).into();
-
-        // t1 = g3 * g4
-        let t1 = self.c0().c2() * self.c0().c1();
-        // t2 = 2 * g1^2 - 3 * g3 * g4
-        let mut t2 = self.c1().c1();
-        t2.square();
-        t2 -= t1;
-        t2.double();
-        t2 -= t1;
-        // t1 = g2 * g5
-        let t1 = self.c1().c0() * self.c1().c2();
-        // c_0 = E * (2 * g1^2 + g2 * g5 - 3 * g3 * g4) + 1
-        t2 += t1;
-        t2.mul_by_nonresidue();
-        self.0.fp6[0].fp2[0] = t2.into();
-        self.0.fp6[0].fp2[0].fp[0] = (self.c0().c0().c0() + &Into::<Fp>::into(1)).0;
-    }
-
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<Fp12Compressed> {
-        if !self.is_cyc() {
-            return None;
-        }
-
-        let c0 = self.c0();
-        let c1 = self.c1();
-
-        Some(Fp12Compressed {
-            c0: [c0.c1(), c0.c2()],
-            c1: [c1.c0(), c1.c2()],
-        })
-    }
-
-    pub fn compress2(&self) -> Option<Fp12Compressed2> {
         if !self.is_cyc() {
             return None;
         }
@@ -241,56 +188,23 @@ impl Fp12 {
         c0.0.fp2[0] = (c0.c0() + &Fp2::from(1)).0;
         let b = c0 * self.c1().inverse().unwrap();
 
-        Some(Fp12Compressed2(b))
+        Some(Fp12Compressed(b))
     }
 }
 
 /// Compressed representation of `Fp12`.
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Fp12Compressed {
-    c0: [Fp2; 2],
-    c1: [Fp2; 2],
-}
+pub struct Fp12Compressed(Fp6);
 
 impl fmt::Debug for Fp12Compressed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Fp12Compressed")
-            .field("c0", &self.c0)
-            .field("c1", &self.c1)
-            .finish()
-    }
-}
-
-impl Fp12Compressed {
-    /// Uncompress the given Fp12 element, returns `None` if the element is an invalid compression
-    /// format.
-    pub fn uncompress(self) -> Option<Fp12> {
-        let mut tmp = Fp12::new(
-            Fp6::new(Fp2::zero(), self.c0[0], self.c0[1]),
-            Fp6::new(self.c1[0], Fp2::zero(), self.c1[1]),
-        );
-        tmp.back_cyc();
-        if tmp.is_cyc() {
-            return Some(tmp);
-        }
-
-        None
-    }
-}
-
-/// Compressed representation of `Fp12`.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Fp12Compressed2(Fp6);
-
-impl fmt::Debug for Fp12Compressed2 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Fp12Compressed2")
             .field("c0", &self.0)
             .finish()
     }
 }
 
-impl Fp12Compressed2 {
+impl Fp12Compressed {
     /// Uncompress the given Fp12 element, returns `None` if the element is an invalid compression
     /// format.
     pub fn uncompress(self) -> Option<Fp12> {
@@ -312,7 +226,7 @@ impl Fp12Compressed2 {
 
 impl crate::traits::Compress for Fp12 {
     fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
-        let c = self.compress2().unwrap();
+        let c = self.compress().unwrap();
 
         out.write_all(&c.0.c0().c0().to_bytes_le())?;
         out.write_all(&c.0.c0().c1().to_bytes_le())?;
@@ -347,7 +261,7 @@ impl crate::traits::Compress for Fp12 {
         let y = Fp2::new(y0, y1);
         let z = Fp2::new(z0, z1);
 
-        let compressed = Fp12Compressed2(Fp6::new(x, y, z));
+        let compressed = Fp12Compressed(Fp6::new(x, y, z));
         compressed.uncompress().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid compression point")
         })
@@ -738,6 +652,8 @@ mod tests {
 
     #[test]
     fn fp12_compression() {
+        use crate::traits::Compress;
+
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
@@ -760,37 +676,6 @@ mod tests {
             assert!(a.is_cyc());
 
             let b = a.compress().unwrap();
-            let c = b.uncompress().unwrap();
-            assert_eq!(a, c, "{}", i);
-        }
-    }
-
-    #[test]
-    fn fp12_compression2() {
-        use crate::traits::Compress;
-
-        let mut rng = XorShiftRng::from_seed([
-            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
-            0xbc, 0xe5,
-        ]);
-
-        for i in 0..100 {
-            let a = Fp12::random(&mut rng);
-            // usually not cyclomatic, so not compressable
-            if let Some(b) = a.compress2() {
-                let c = b.uncompress().unwrap();
-                assert_eq!(a, c, "{}", i);
-            } else {
-                println!("skipping {}", i);
-            }
-
-            // pairing result, should be compressable
-            let p = G1Projective::random(&mut rng).into_affine();
-            let q = G2Projective::random(&mut rng).into_affine();
-            let a = crate::pairing(p, q);
-            assert!(a.is_cyc());
-
-            let b = a.compress2().unwrap();
             let c = b.uncompress().unwrap();
             assert_eq!(a, c, "{}", i);
 
