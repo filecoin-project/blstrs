@@ -3,7 +3,7 @@ version: 2.1
 parameters:
   nightly-version:
     type: string
-    default: "nightly-2021-01-21"
+    default: "nightly-2021-04-24"
 
 orbs:
   codecov: codecov/codecov@1
@@ -22,7 +22,7 @@ restore-workspace: &restore-workspace
 restore-cache: &restore-cache
   restore_cache:
     keys:
-      - cargo-v5-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+      - cargo-v6-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
       - repo-source-{{ .Branch }}-{{ .Revision }}
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
           command: cargo generate-lockfile
       - restore_cache:
           keys:
-            - cargo-v5-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+            - cargo-v6-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
       - run: rm -rf ~/.rustup
       - run: rustup self update
       - run: rustup install stable
@@ -52,7 +52,7 @@ jobs:
           paths:
             - crate
       - save_cache:
-          key: cargo-v5-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+          key: cargo-v6-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
           paths:
             - "~/.cargo"
             - "~/.rustup"
@@ -74,25 +74,46 @@ jobs:
       - run:
           name: Run cargo clippy
           # Nightly is needed as `--all-targets` also runs on the benchmarks
-          command: cargo +<< pipeline.parameters.nightly-version >> clippy --all-targets --all-features --workspace -- -D warnings
+          command: cargo +<< pipeline.parameters.nightly-version >> clippy --all-targets --features gpu --workspace -- -D warnings
+      - run:
+         name: Run cargo clippy (benches)
+         command: cargo +<< pipeline.parameters.nightly-version >> clippy --all-targets --features gpu,__private_bench  --workspace -- -D warnings
 
-  build:
+  build_default:
     executor: default
     steps:
       - *restore-workspace
       - *restore-cache
       - run:
           name: Run cargo build
-          command: cargo build --all-features --workspace
+          command: cargo build --workspace
 
-  test:
+  test_default:
     executor: default
     steps:
       - *restore-workspace
       - *restore-cache
       - run:
           name: Run cargo test
-          command: cargo test --all-features --workspace
+          command: cargo test --workspace
+
+  test_portable:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo test
+          command: cargo test --features portable --workspace
+
+  check_gpu:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo check
+          command: cargo check --features gpu --workspace
 
   bench:
     executor: default
@@ -159,13 +180,19 @@ workflows:
       - clippy:
           requires:
             - cargo_fetch
-      - build:
+      - build_default:
           requires:
             - cargo_fetch
       - bench:
           requires:
             - cargo_fetch
-      - test:
+      - test_default:
+          requires:
+            - cargo_fetch
+      - test_portable:
+          requires:
+            - cargo_fetch
+      - check_gpu:
           requires:
             - cargo_fetch
       - coverage_run:
