@@ -61,15 +61,34 @@ impl Into<blst_scalar> for Scalar {
 const LIMBS: usize = 4;
 const LIMB_BITS: usize = 64;
 
-const MODULUS: ScalarRepr = ScalarRepr([
-    0xffffffff00000001,
-    0x53bda402fffe5bfe,
-    0x3339d80809a1d805,
-    0x73eda753299d7d48,
-]);
+const MODULUS: Scalar = Scalar(blst_fr {
+    l: [
+        0xffff_ffff_0000_0001,
+        0x53bd_a402_fffe_5bfe,
+        0x3339_d808_09a1_d805,
+        0x73ed_a753_299d_7d48,
+    ],
+});
+
+// GENERATOR = 7 (multiplicative generator of r-1 order, that is also quadratic nonresidue)
+const GENERATOR: Scalar = Scalar(blst_fr {
+    l: [
+        0x0000_000e_ffff_fff1,
+        0x17e3_63d3_0018_9c0f,
+        0xff9c_5787_6f84_57b0,
+        0x3513_3220_8fc5_a8c4,
+    ],
+});
 
 /// R = 2^256 mod q
-const R: ScalarRepr = ScalarRepr([1, 0, 0, 0]);
+const R: Scalar = Scalar(blst_fr {
+    l: [
+        0x0000_0001_ffff_fffe,
+        0x5884_b7fa_0003_4802,
+        0x998c_4fef_ecbc_4ff5,
+        0x1824_b159_acc5_056f,
+    ],
+});
 
 impl fmt::Debug for ScalarRepr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -347,29 +366,41 @@ impl_binops_multiplicative!(Scalar, Scalar, fff::Field);
 /// The number of bits we should "shave" from a randomly sampled reputation.
 const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
 
+#[inline(always)]
+fn cmp_native(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> core::cmp::Ordering {
+    for (a, b) in a.iter().rev().zip(b.iter().rev()) {
+        if a < b {
+            return core::cmp::Ordering::Less;
+        } else if a > b {
+            return core::cmp::Ordering::Greater;
+        }
+    }
+
+    core::cmp::Ordering::Equal
+}
 impl fff::Field for Scalar {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
         loop {
-            let mut raw = blst_fr::default();
+            let mut raw = Scalar(blst_fr::default());
             for i in 0..4 {
-                raw.l[i] = rng.next_u64();
+                raw.0.l[i] = rng.next_u64();
             }
 
             // Mask away the unused most-significant bits.
-            raw.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+            raw.0.l[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
-            if ScalarRepr(raw.l) < MODULUS {
-                return Scalar(raw);
+            if raw.is_valid() {
+                return raw;
             }
         }
     }
 
     fn zero() -> Self {
-        Scalar(blst_fr::default())
+        Scalar(blst_fr { l: [0u64; LIMBS] })
     }
 
     fn one() -> Self {
-        Scalar::from_repr(R).unwrap()
+        R
     }
 
     fn is_zero(&self) -> bool {
@@ -431,7 +462,7 @@ impl fff::PrimeField for Scalar {
     const S: u32 = S;
 
     fn from_repr(repr: Self::Repr) -> Result<Self, fff::PrimeFieldDecodingError> {
-        if ScalarRepr(repr.0) < MODULUS {
+        if Scalar(blst_fr { l: repr.0 }).is_valid() {
             let mut out = blst_fr::default();
             unsafe { blst_fr_from_uint64(&mut out, repr.0.as_ptr()) }
             Ok(Scalar(out))
@@ -449,11 +480,11 @@ impl fff::PrimeField for Scalar {
     }
 
     fn char() -> Self::Repr {
-        MODULUS
+        ScalarRepr(MODULUS.0.l)
     }
 
     fn multiplicative_generator() -> Self {
-        Scalar::from_repr(ScalarRepr::new([7, 0, 0, 0])).unwrap()
+        GENERATOR
     }
 
     fn root_of_unity() -> Self {
@@ -692,6 +723,10 @@ impl Scalar {
 
         Scalar(out)
     }
+
+    fn is_valid(&self) -> bool {
+        cmp_native(&self.0.l, &MODULUS.0.l) == core::cmp::Ordering::Less
+    }
 }
 
 #[cfg(test)]
@@ -730,7 +765,7 @@ mod tests {
         let mut inv = 1u64;
         for _ in 0..63 {
             inv = inv.wrapping_mul(inv);
-            inv = inv.wrapping_mul(MODULUS.0[0]);
+            inv = inv.wrapping_mul(MODULUS.0.l[0]);
         }
         inv = inv.wrapping_neg();
 
@@ -937,7 +972,7 @@ mod tests {
         let mut tmp = Scalar::zero();
         tmp -= &LARGEST;
 
-        let mut tmp2 = Scalar(blst::blst_fr { l: MODULUS.0 });
+        let mut tmp2 = MODULUS;
         tmp2 -= &LARGEST;
 
         assert_eq!(tmp, tmp2);
@@ -1027,7 +1062,7 @@ mod tests {
             0x73eda753299d7d48,
         ];
 
-        let mut r1 = Scalar::from_repr(R).unwrap();
+        let mut r1 = R;
         let mut r2 = r1;
 
         for _ in 0..100 {
@@ -1036,7 +1071,7 @@ mod tests {
 
             assert_eq!(r1, r2);
             // Add R so we check something different next time around
-            r1 += &Scalar::from_repr(R).unwrap();
+            r1 += R;
             r2 = r1;
         }
     }
