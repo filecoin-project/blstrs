@@ -369,10 +369,14 @@ const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
 #[inline(always)]
 fn cmp_native(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> core::cmp::Ordering {
     for (a, b) in a.iter().rev().zip(b.iter().rev()) {
-        if a < b {
-            return core::cmp::Ordering::Less;
-        } else if a > b {
-            return core::cmp::Ordering::Greater;
+        match a.cmp(b) {
+            core::cmp::Ordering::Less => {
+                return core::cmp::Ordering::Less;
+            }
+            core::cmp::Ordering::Greater => {
+                return core::cmp::Ordering::Greater;
+            }
+            _ => {}
         }
     }
 

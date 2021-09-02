@@ -380,10 +380,7 @@ impl Field for Fp6 {
         tmp2 = self.c0();
         tmp2 *= &c0;
         tmp1 += &tmp2;
-        match tmp1.inverse() {
-            Some(t) => Some(Fp6::new(t * c0, t * c1, t * c2)),
-            None => None,
-        }
+        tmp1.inverse().map(|t| Fp6::new(t * c0, t * c1, t * c2))
     }
 }
 
