@@ -36,8 +36,6 @@ jobs:
       - restore_cache:
           keys:
             - cargo-v5-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
-      - run: cargo update
-      - run: cargo fetch
       - run: rm -rf ~/.rustup
       - run: rustup self update
       - run: rustup install stable
@@ -47,6 +45,8 @@ jobs:
       - run: rustup component add --toolchain << pipeline.parameters.nightly-version >> llvm-tools-preview
       - run: rustc --version
       - run: rm -rf .git
+      - run: cargo update
+      - run: cargo fetch
       - persist_to_workspace:
           root: /mnt
           paths:
