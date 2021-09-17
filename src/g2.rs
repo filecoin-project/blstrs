@@ -382,8 +382,7 @@ impl G2Affine {
     /// true unless an "unchecked" API was used.
     pub fn is_on_curve(&self) -> Choice {
         // FIXME: is_identity check should happen in blst
-        let is_on_curve = unsafe { Choice::from(blst_p2_affine_on_curve(&self.0) as u8) };
-        is_on_curve | self.is_identity()
+        unsafe { Choice::from(blst_p2_affine_on_curve(&self.0) as u8) }
     }
 
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {

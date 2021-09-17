@@ -361,8 +361,7 @@ impl G1Affine {
     /// Returns true if this point is on the curve. This should always return
     /// true unless an "unchecked" API was used.
     pub fn is_on_curve(&self) -> Choice {
-        let is_on_curve = unsafe { Choice::from(blst_p1_affine_on_curve(&self.0) as u8) };
-        is_on_curve | self.is_identity()
+        unsafe { Choice::from(blst_p1_affine_on_curve(&self.0) as u8) }
     }
 
     pub fn from_raw_unchecked(x: Fp, y: Fp, _infinity: bool) -> Self {
@@ -832,6 +831,11 @@ mod tests {
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
         ]);
+
+        {
+            let z = G1Projective::identity();
+            assert_eq!(z.is_identity().unwrap_u8(), 1);
+        }
 
         // Negation edge case with zero.
         {
