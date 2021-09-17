@@ -8,14 +8,17 @@ use core::{
 };
 
 use crate::{
-    fp::{FROBENIUS_COEFF_FP6_C1, FROBENIUS_COEFF_FP6_C2},
-    Fp, Fp2,
+    fp::{Fp, FROBENIUS_COEFF_FP6_C1, FROBENIUS_COEFF_FP6_C2},
+    fp2::Fp2,
 };
 
-use fff::Field;
+use ff::Field;
+use rand_core::RngCore;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub struct Fp6(pub(crate) blst_fp6);
 
 impl fmt::Debug for Fp6 {
@@ -32,7 +35,7 @@ impl fmt::Display for Fp6 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Fp6({} + {} * v, {} * v^2)",
+            "Fp6({:?} + ({:?}) * v, ({:?}) * v^2)",
             self.c0(),
             self.c1(),
             self.c2()
@@ -90,12 +93,40 @@ impl PartialEq for Fp6 {
     }
 }
 
-impl<'a> Neg for &'a Fp6 {
+impl ConstantTimeEq for Fp6 {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.c0().ct_eq(&other.c0()) & self.c1().ct_eq(&other.c1()) & self.c2().ct_eq(&other.c2())
+    }
+}
+
+impl ConditionallySelectable for Fp6 {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Fp6(blst_fp6 {
+            fp2: [
+                Fp2::conditional_select(&a.c0(), &b.c0(), choice).0,
+                Fp2::conditional_select(&a.c1(), &b.c1(), choice).0,
+                Fp2::conditional_select(&a.c2(), &b.c2(), choice).0,
+            ],
+        })
+    }
+}
+
+macro_rules! op {
+    ($lhs:expr, $op:expr, $rhs:expr) => {
+        unsafe {
+            $op(&mut $lhs.0.fp2[0], &$lhs.0.fp2[0], &$rhs.0.fp2[0]);
+            $op(&mut $lhs.0.fp2[1], &$lhs.0.fp2[1], &$rhs.0.fp2[1]);
+            $op(&mut $lhs.0.fp2[2], &$lhs.0.fp2[2], &$rhs.0.fp2[2]);
+        }
+    };
+}
+
+impl Neg for &Fp6 {
     type Output = Fp6;
 
     #[inline]
     fn neg(self) -> Fp6 {
-        self.neg()
+        -*self
     }
 }
 
@@ -103,208 +134,75 @@ impl Neg for Fp6 {
     type Output = Fp6;
 
     #[inline]
-    fn neg(self) -> Fp6 {
-        -&self
+    fn neg(mut self) -> Fp6 {
+        unsafe {
+            blst_fp2_cneg(&mut self.0.fp2[0], &self.0.fp2[0], true);
+            blst_fp2_cneg(&mut self.0.fp2[1], &self.0.fp2[1], true);
+            blst_fp2_cneg(&mut self.0.fp2[2], &self.0.fp2[2], true);
+        }
+        self
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp6> for &'a Fp6 {
+impl Sub<&Fp6> for &Fp6 {
     type Output = Fp6;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp6) -> Fp6 {
-        self.sub(rhs)
-    }
-}
-
-impl<'a, 'b> Add<&'b Fp6> for &'a Fp6 {
-    type Output = Fp6;
-
-    #[inline]
-    fn add(self, rhs: &'b Fp6) -> Fp6 {
-        self.add(rhs)
-    }
-}
-
-impl<'a, 'b> Mul<&'b Fp6> for &'a Fp6 {
-    type Output = Fp6;
-
-    #[inline]
-    fn mul(self, rhs: &'b Fp6) -> Fp6 {
-        self.mul(rhs)
-    }
-}
-
-impl_binops_additive!(Fp6, Fp6, fff::Field);
-impl_binops_multiplicative!(Fp6, Fp6, fff::Field);
-
-impl Fp6 {
-    /// Constructs an element of `Fp6`.
-    pub const fn new(c0: Fp2, c1: Fp2, c2: Fp2) -> Fp6 {
-        Fp6(blst_fp6 {
-            fp2: [c0.0, c1.0, c2.0],
-        })
-    }
-
-    #[inline]
-    pub fn add(&self, rhs: &Fp6) -> Fp6 {
-        let c0 = (self.c0() + rhs.c0()).0;
-        let c1 = (self.c1() + rhs.c1()).0;
-        let c2 = (self.c2() + rhs.c2()).0;
-
-        Fp6(blst_fp6 { fp2: [c0, c1, c2] })
-    }
-
-    #[inline]
-    pub fn neg(&self) -> Fp6 {
-        let c0 = (-self.c0()).0;
-        let c1 = (-self.c1()).0;
-        let c2 = (-self.c2()).0;
-
-        Fp6(blst_fp6 { fp2: [c0, c1, c2] })
-    }
-
-    #[inline]
-    pub fn sub(&self, rhs: &Fp6) -> Fp6 {
-        let c0 = (self.c0() - rhs.c0()).0;
-        let c1 = (self.c1() - rhs.c1()).0;
-        let c2 = (self.c2() - rhs.c2()).0;
-
-        Fp6(blst_fp6 { fp2: [c0, c1, c2] })
-    }
-
-    #[inline]
-    pub fn mul(&self, rhs: &Fp6) -> Fp6 {
+    fn sub(self, rhs: &Fp6) -> Fp6 {
         let mut out = *self;
-        fff::Field::mul_assign(&mut out, rhs);
+        out -= rhs;
         out
     }
+}
 
-    pub fn c0(&self) -> Fp2 {
-        self.0.fp2[0].into()
-    }
+impl Add<&Fp6> for &Fp6 {
+    type Output = Fp6;
 
-    pub fn c1(&self) -> Fp2 {
-        self.0.fp2[1].into()
-    }
-
-    pub fn c2(&self) -> Fp2 {
-        self.0.fp2[2].into()
-    }
-
-    /// Multiply by quadratic nonresidue v.
-    pub fn mul_by_nonresidue(&mut self) {
-        self.0.fp2.swap(0, 1);
-        self.0.fp2.swap(0, 2);
-
-        let mut c0 = self.c0();
-        c0.mul_by_nonresidue();
-        self.0.fp2[0] = c0.0;
+    #[inline]
+    fn add(self, rhs: &Fp6) -> Fp6 {
+        let mut out = *self;
+        out += rhs;
+        out
     }
 }
 
-impl Field for Fp6 {
-    fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        Fp6::new(Fp2::random(rng), Fp2::random(rng), Fp2::random(rng))
+impl Mul<&Fp6> for &Fp6 {
+    type Output = Fp6;
+
+    #[inline]
+    fn mul(self, rhs: &Fp6) -> Fp6 {
+        let mut out = *self;
+        out *= rhs;
+        out
     }
+}
 
-    fn zero() -> Self {
-        Fp6::new(Fp2::zero(), Fp2::zero(), Fp2::zero())
+impl AddAssign<&Fp6> for Fp6 {
+    #[inline]
+    fn add_assign(&mut self, rhs: &Fp6) {
+        op!(self, blst_fp2_add, rhs);
     }
+}
 
-    fn one() -> Self {
-        Fp6::new(Fp2::one(), Fp2::zero(), Fp2::zero())
+impl SubAssign<&Fp6> for Fp6 {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &Fp6) {
+        op!(self, blst_fp2_sub, rhs);
     }
+}
 
-    fn is_zero(&self) -> bool {
-        self.c0().is_zero() && self.c1().is_zero() && self.c2().is_zero()
-    }
-
-    fn double(&mut self) {
-        self.0.fp2[0] = (self.c0() + self.c0()).0;
-        self.0.fp2[1] = (self.c1() + self.c1()).0;
-        self.0.fp2[2] = (self.c2() + self.c2()).0;
-    }
-
-    fn negate(&mut self) {
-        *self = self.neg();
-    }
-
-    fn add_assign(&mut self, other: &Self) {
-        self.0.fp2[0] = (self.c0() + other.c0()).0;
-        self.0.fp2[1] = (self.c1() + other.c1()).0;
-        self.0.fp2[2] = (self.c2() + other.c2()).0;
-    }
-
-    fn sub_assign(&mut self, other: &Self) {
-        self.0.fp2[0] = (self.c0() - other.c0()).0;
-        self.0.fp2[1] = (self.c1() - other.c1()).0;
-        self.0.fp2[2] = (self.c2() - other.c2()).0;
-    }
-
-    fn frobenius_map(&mut self, power: usize) {
-        let mut c0 = self.c0();
-        c0.frobenius_map(power);
-        let mut c1 = self.c1();
-        c1.frobenius_map(power);
-        let mut c2 = self.c2();
-        c2.frobenius_map(power);
-
-        c1 *= &FROBENIUS_COEFF_FP6_C1[power % 6];
-        c2 *= &FROBENIUS_COEFF_FP6_C2[power % 6];
-
-        self.0.fp2[0] = c0.0;
-        self.0.fp2[1] = c1.0;
-        self.0.fp2[2] = c2.0;
-    }
-
-    fn square(&mut self) {
-        let mut s0 = self.c0();
-        s0.square();
-        let mut ab = self.c0();
-        ab *= &self.c1();
-        let mut s1 = ab;
-        s1.double();
-        let mut s2 = self.c0();
-        s2 -= &self.c1();
-        s2 += &self.c2();
-        s2.square();
-        let mut bc = self.c1();
-        bc *= &self.c2();
-        let mut s3 = bc;
-        s3.double();
-        let mut s4 = self.c2();
-        s4.square();
-
-        let mut c0 = s3;
-        c0.mul_by_nonresidue();
-        c0 += &s0;
-
-        let mut c1 = s4;
-        c1.mul_by_nonresidue();
-        c1 += &s1;
-
-        let mut c2 = s1;
-        c2 += &s2;
-        c2 += &s3;
-        c2 -= &s0;
-        c2 -= &s4;
-
-        self.0.fp2[0] = c0.0;
-        self.0.fp2[1] = c1.0;
-        self.0.fp2[2] = c2.0;
-    }
-
-    fn mul_assign(&mut self, other: &Self) {
+impl MulAssign<&Fp6> for Fp6 {
+    #[inline]
+    fn mul_assign(&mut self, rhs: &Fp6) {
         let mut a_a = self.c0();
         let mut b_b = self.c1();
         let mut c_c = self.c2();
-        a_a *= &other.c0();
-        b_b *= &other.c1();
-        c_c *= &other.c2();
+        a_a *= &rhs.c0();
+        b_b *= &rhs.c1();
+        c_c *= &rhs.c2();
 
-        let mut t1 = other.c1();
-        t1 += &other.c2();
+        let mut t1 = rhs.c1();
+        t1 += &rhs.c2();
         {
             let mut tmp = self.c1();
             tmp += &self.c2();
@@ -316,8 +214,8 @@ impl Field for Fp6 {
             t1 += &a_a;
         }
 
-        let mut t3 = other.c0();
-        t3 += &other.c2();
+        let mut t3 = rhs.c0();
+        t3 += &rhs.c2();
         {
             let mut tmp = self.c0();
             tmp += &self.c2();
@@ -328,8 +226,8 @@ impl Field for Fp6 {
             t3 -= &c_c;
         }
 
-        let mut t2 = other.c0();
-        t2 += &other.c1();
+        let mut t2 = rhs.c0();
+        t2 += &rhs.c1();
         {
             let mut tmp = self.c0();
             tmp += &self.c1();
@@ -345,19 +243,87 @@ impl Field for Fp6 {
         self.0.fp2[1] = t2.0;
         self.0.fp2[2] = t3.0;
     }
+}
 
-    fn inverse(&self) -> Option<Self> {
+impl_add_sub!(Fp6);
+impl_add_sub_assign!(Fp6);
+impl_mul!(Fp6);
+impl_mul_assign!(Fp6);
+
+impl Field for Fp6 {
+    fn random(mut rng: impl RngCore) -> Self {
+        Fp6::new(
+            Fp2::random(&mut rng),
+            Fp2::random(&mut rng),
+            Fp2::random(&mut rng),
+        )
+    }
+
+    fn zero() -> Self {
+        Fp6::new(Fp2::zero(), Fp2::zero(), Fp2::zero())
+    }
+
+    fn one() -> Self {
+        Fp6::new(Fp2::one(), Fp2::zero(), Fp2::zero())
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.c0().is_zero() & self.c1().is_zero() & self.c2().is_zero()
+    }
+
+    fn double(&self) -> Self {
+        let mut out = *self;
+        out += self;
+        out
+    }
+
+    fn square(&self) -> Self {
+        let mut s0 = self.c0();
+        s0 = s0.square();
+        let mut ab = self.c0();
+        ab *= &self.c1();
+        let mut s1 = ab;
+        s1 = s1.double();
+        let mut s2 = self.c0();
+        s2 -= &self.c1();
+        s2 += &self.c2();
+        s2 = s2.square();
+        let mut bc = self.c1();
+        bc *= &self.c2();
+        let mut s3 = bc;
+        s3 = s3.double();
+        let mut s4 = self.c2();
+        s4 = s4.square();
+
+        let mut c0 = s3;
+        c0.mul_by_nonresidue();
+        c0 += &s0;
+
+        let mut c1 = s4;
+        c1.mul_by_nonresidue();
+        c1 += &s1;
+
+        let mut c2 = s1;
+        c2 += &s2;
+        c2 += &s3;
+        c2 -= &s0;
+        c2 -= &s4;
+
+        Fp6::new(c0, c1, c2)
+    }
+
+    fn invert(&self) -> CtOption<Self> {
         let mut c0 = self.c2();
         c0.mul_by_nonresidue();
         c0 *= &self.c1();
         c0 = -c0;
         {
             let mut c0s = self.c0();
-            c0s.square();
+            c0s = c0s.square();
             c0 += &c0s;
         }
         let mut c1 = self.c2();
-        c1.square();
+        c1 = c1.square();
         c1.mul_by_nonresidue();
         {
             let mut c01 = self.c0();
@@ -365,7 +331,7 @@ impl Field for Fp6 {
             c1 -= &c01;
         }
         let mut c2 = self.c1();
-        c2.square();
+        c2 = c2.square();
         {
             let mut c02 = self.c0();
             c02 *= &self.c2();
@@ -380,15 +346,65 @@ impl Field for Fp6 {
         tmp2 = self.c0();
         tmp2 *= &c0;
         tmp1 += &tmp2;
-        tmp1.inverse().map(|t| Fp6::new(t * c0, t * c1, t * c2))
+        tmp1.invert().map(|t| Fp6::new(t * c0, t * c1, t * c2))
+    }
+
+    fn sqrt(&self) -> CtOption<Self> {
+        unimplemented!()
+    }
+}
+
+impl Fp6 {
+    /// Constructs an element of `Fp6`.
+    pub const fn new(c0: Fp2, c1: Fp2, c2: Fp2) -> Fp6 {
+        Fp6(blst_fp6 {
+            fp2: [c0.0, c1.0, c2.0],
+        })
+    }
+
+    pub fn c0(&self) -> Fp2 {
+        Fp2(self.0.fp2[0])
+    }
+
+    pub fn c1(&self) -> Fp2 {
+        Fp2(self.0.fp2[1])
+    }
+
+    pub fn c2(&self) -> Fp2 {
+        Fp2(self.0.fp2[2])
+    }
+
+    /// Multiply by quadratic nonresidue v.
+    pub fn mul_by_nonresidue(&mut self) {
+        self.0.fp2.swap(0, 1);
+        self.0.fp2.swap(0, 2);
+
+        let mut c0 = self.c0();
+        c0.mul_by_nonresidue();
+        self.0.fp2[0] = c0.0;
+    }
+
+    pub fn frobenius_map(&mut self, power: usize) {
+        let mut c0 = self.c0();
+        c0.frobenius_map(power);
+        let mut c1 = self.c1();
+        c1.frobenius_map(power);
+        let mut c2 = self.c2();
+        c2.frobenius_map(power);
+
+        c1 *= &FROBENIUS_COEFF_FP6_C1[power % 6];
+        c2 *= &FROBENIUS_COEFF_FP6_C2[power % 6];
+
+        self.0.fp2[0] = c0.0;
+        self.0.fp2[1] = c1.0;
+        self.0.fp2[2] = c2.0;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Fp2, Fp6};
+    use super::*;
 
-    use fff::{Field, PrimeField};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
@@ -417,7 +433,33 @@ mod tests {
     }
 
     #[test]
-    fn fp6_random_frobenius_tests() {
-        crate::tests::field::random_frobenius_tests::<Fp6, _>(crate::Fp::char(), 13);
+    fn test_fp6_frobenius_map() {
+        use std::convert::TryFrom;
+
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let characteristic: Vec<u64> = Fp::char()
+            .chunks(8)
+            .map(|chunk| u64::from_le_bytes(<[u8; 8]>::try_from(chunk).unwrap()))
+            .collect();
+
+        let maxpower = 13;
+
+        for _ in 0..100 {
+            for i in 0..(maxpower + 1) {
+                let mut a = Fp6::random(&mut rng);
+                let mut b = a;
+
+                for _ in 0..i {
+                    a = a.pow_vartime(&characteristic);
+                }
+                b.frobenius_map(i);
+
+                assert_eq!(a, b);
+            }
+        }
     }
 }

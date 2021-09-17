@@ -1,17 +1,21 @@
 //! This module implements arithmetic over the quadratic extension field Fp12.
 
+use blst::*;
+
 use core::{
     fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use blst::*;
-use fff::Field;
+use ff::Field;
+use rand_core::RngCore;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::{Fp, Fp2, Fp6};
+use crate::{fp::Fp, fp2::Fp2, fp6::Fp6, traits::Compress};
 
 /// This represents an element $c_0 + c_1 w$ of $\mathbb{F}_{p^12} = \mathbb{F}_{p^6} / w^2 - v$.
 #[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(transparent)]
 pub struct Fp12(pub(crate) blst_fp12);
 
 impl fmt::Debug for Fp12 {
@@ -59,18 +63,72 @@ impl From<Fp12> for blst_fp12 {
     }
 }
 
+impl ConstantTimeEq for Fp12 {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.c0().ct_eq(&other.c0()) & self.c1().ct_eq(&other.c1())
+    }
+}
+
+impl ConditionallySelectable for Fp12 {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Fp12(blst_fp12 {
+            fp6: [
+                Fp6::conditional_select(&a.c0(), &b.c0(), choice).0,
+                Fp6::conditional_select(&a.c1(), &b.c1(), choice).0,
+            ],
+        })
+    }
+}
+
 impl Default for Fp12 {
     fn default() -> Self {
         Fp12::zero()
     }
 }
 
-impl<'a> Neg for &'a Fp12 {
+macro_rules! op {
+    ($lhs:expr, $op:expr, $rhs:expr) => {
+        unsafe {
+            $op(
+                &mut $lhs.0.fp6[0].fp2[0],
+                &$lhs.0.fp6[0].fp2[0],
+                &$rhs.0.fp6[0].fp2[0],
+            );
+            $op(
+                &mut $lhs.0.fp6[0].fp2[1],
+                &$lhs.0.fp6[0].fp2[1],
+                &$rhs.0.fp6[0].fp2[1],
+            );
+            $op(
+                &mut $lhs.0.fp6[0].fp2[2],
+                &$lhs.0.fp6[0].fp2[2],
+                &$rhs.0.fp6[0].fp2[2],
+            );
+            $op(
+                &mut $lhs.0.fp6[1].fp2[0],
+                &$lhs.0.fp6[1].fp2[0],
+                &$rhs.0.fp6[1].fp2[0],
+            );
+            $op(
+                &mut $lhs.0.fp6[1].fp2[1],
+                &$lhs.0.fp6[1].fp2[1],
+                &$rhs.0.fp6[1].fp2[1],
+            );
+            $op(
+                &mut $lhs.0.fp6[1].fp2[2],
+                &$lhs.0.fp6[1].fp2[2],
+                &$rhs.0.fp6[1].fp2[2],
+            );
+        }
+    };
+}
+
+impl Neg for &Fp12 {
     type Output = Fp12;
 
     #[inline]
     fn neg(self) -> Fp12 {
-        self.neg()
+        -*self
     }
 }
 
@@ -78,40 +136,118 @@ impl Neg for Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn neg(self) -> Fp12 {
-        -&self
+    fn neg(mut self) -> Fp12 {
+        unsafe {
+            blst_fp2_cneg(&mut self.0.fp6[0].fp2[0], &self.0.fp6[0].fp2[0], true);
+            blst_fp2_cneg(&mut self.0.fp6[0].fp2[1], &self.0.fp6[0].fp2[1], true);
+            blst_fp2_cneg(&mut self.0.fp6[0].fp2[2], &self.0.fp6[0].fp2[2], true);
+            blst_fp2_cneg(&mut self.0.fp6[1].fp2[0], &self.0.fp6[1].fp2[0], true);
+            blst_fp2_cneg(&mut self.0.fp6[1].fp2[1], &self.0.fp6[1].fp2[1], true);
+            blst_fp2_cneg(&mut self.0.fp6[1].fp2[2], &self.0.fp6[1].fp2[2], true);
+        }
+        self
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp12> for &'a Fp12 {
+impl Sub<&Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp12) -> Fp12 {
-        self.sub(rhs)
+    fn sub(self, rhs: &Fp12) -> Fp12 {
+        let mut out = *self;
+        out -= rhs;
+        out
     }
 }
 
-impl<'a, 'b> Add<&'b Fp12> for &'a Fp12 {
+impl Add<&Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn add(self, rhs: &'b Fp12) -> Fp12 {
-        self.add(rhs)
+    fn add(self, rhs: &Fp12) -> Fp12 {
+        let mut out = *self;
+        out += rhs;
+        out
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp12> for &'a Fp12 {
+impl Mul<&Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp12) -> Fp12 {
-        self.mul(rhs)
+    fn mul(self, rhs: &Fp12) -> Fp12 {
+        let mut out = blst_fp12::default();
+        unsafe { blst_fp12_mul(&mut out, &self.0, &rhs.0) };
+        Fp12(out)
     }
 }
 
-impl_binops_additive!(Fp12, Fp12, fff::Field);
-impl_binops_multiplicative!(Fp12, Fp12, fff::Field);
+impl AddAssign<&Fp12> for Fp12 {
+    #[inline]
+    fn add_assign(&mut self, rhs: &Fp12) {
+        op!(self, blst_fp2_add, rhs);
+    }
+}
+
+impl SubAssign<&Fp12> for Fp12 {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &Fp12) {
+        op!(self, blst_fp2_sub, rhs);
+    }
+}
+
+impl MulAssign<&Fp12> for Fp12 {
+    #[inline]
+    fn mul_assign(&mut self, rhs: &Fp12) {
+        unsafe { blst_fp12_mul(&mut self.0, &self.0, &rhs.0) };
+    }
+}
+
+impl_add_sub!(Fp12);
+impl_add_sub_assign!(Fp12);
+impl_mul!(Fp12);
+impl_mul_assign!(Fp12);
+
+impl Field for Fp12 {
+    fn random(mut rng: impl RngCore) -> Self {
+        Fp12::new(Fp6::random(&mut rng), Fp6::random(&mut rng))
+    }
+
+    fn zero() -> Self {
+        Fp12::new(Fp6::zero(), Fp6::zero())
+    }
+
+    fn one() -> Self {
+        Fp12::new(Fp6::one(), Fp6::zero())
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.c0().is_zero() & self.c1().is_zero()
+    }
+
+    fn double(&self) -> Self {
+        let mut out = *self;
+        out += self;
+        out
+    }
+
+    fn square(&self) -> Self {
+        let mut sq = *self;
+        unsafe { blst_fp12_sqr(&mut sq.0, &self.0) };
+        sq
+    }
+
+    fn invert(&self) -> CtOption<Self> {
+        let is_zero = self.ct_eq(&Self::zero());
+        let mut inv = *self;
+        unsafe { blst_fp12_inverse(&mut inv.0, &self.0) }
+        CtOption::new(inv, !is_zero)
+    }
+
+    fn sqrt(&self) -> CtOption<Self> {
+        unimplemented!()
+    }
+}
 
 impl Fp12 {
     /// Constructs an element of `Fp12`.
@@ -119,45 +255,47 @@ impl Fp12 {
         Fp12(blst_fp12 { fp6: [c0.0, c1.0] })
     }
 
-    #[inline]
-    pub fn add(&self, rhs: &Fp12) -> Fp12 {
-        let c0 = (self.c0() + rhs.c0()).0;
-        let c1 = (self.c1() + rhs.c1()).0;
+    pub fn frobenius_map(&mut self, power: usize) {
+        if power > 0 && power < 4 {
+            unsafe { blst_fp12_frobenius_map(&mut self.0, &self.0, power) }
+        } else {
+            let mut c0 = self.c0();
+            c0.frobenius_map(power);
+            let mut c1 = self.c1();
+            c1.frobenius_map(power);
 
-        Fp12(blst_fp12 { fp6: [c0, c1] })
-    }
+            let mut c0_raw = blst_fp2::default();
+            let mut c1_raw = blst_fp2::default();
+            let mut c2_raw = blst_fp2::default();
+            unsafe {
+                blst_fp2_mul(
+                    &mut c0_raw,
+                    &c1.0.fp2[0],
+                    &FROBENIUS_COEFF_FP12_C1[power % 12],
+                );
+                blst_fp2_mul(
+                    &mut c1_raw,
+                    &c1.0.fp2[1],
+                    &FROBENIUS_COEFF_FP12_C1[power % 12],
+                );
+                blst_fp2_mul(
+                    &mut c2_raw,
+                    &c1.0.fp2[2],
+                    &FROBENIUS_COEFF_FP12_C1[power % 12],
+                );
+            }
+            c1.0.fp2 = [c0_raw, c1_raw, c2_raw];
 
-    #[inline]
-    pub fn neg(&self) -> Fp12 {
-        let c0 = (-self.c0()).0;
-        let c1 = (-self.c1()).0;
-
-        Fp12(blst_fp12 { fp6: [c0, c1] })
-    }
-
-    #[inline]
-    pub fn sub(&self, rhs: &Fp12) -> Fp12 {
-        let c0 = (self.c0() - rhs.c0()).0;
-        let c1 = (self.c1() - rhs.c1()).0;
-
-        Fp12(blst_fp12 { fp6: [c0, c1] })
-    }
-
-    #[inline]
-    pub fn mul(&self, rhs: &Fp12) -> Fp12 {
-        let mut out = blst_fp12::default();
-
-        unsafe { blst_fp12_mul(&mut out, &self.0, &rhs.0) };
-
-        Fp12(out)
+            self.0.fp6 = [c0.0, c1.0];
+        }
     }
 
     pub fn c0(&self) -> Fp6 {
-        self.0.fp6[0].into()
+        Fp6(self.0.fp6[0])
     }
 
     pub fn c1(&self) -> Fp6 {
-        self.0.fp6[1].into()
+        Fp6(self.0.fp6[1])
     }
 
     pub fn conjugate(&mut self) {
@@ -186,7 +324,7 @@ impl Fp12 {
         let mut c0 = self.c0();
 
         c0.0.fp2[0] = (c0.c0() + Fp2::from(1)).0;
-        let b = c0 * self.c1().inverse().unwrap();
+        let b = c0 * self.c1().invert().unwrap();
 
         Some(Fp12Compressed(b))
     }
@@ -194,6 +332,7 @@ impl Fp12 {
 
 /// Compressed representation of `Fp12`.
 #[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(transparent)]
 pub struct Fp12Compressed(Fp6);
 
 impl fmt::Debug for Fp12Compressed {
@@ -212,9 +351,8 @@ impl Fp12Compressed {
         // "Compression in finite fields and torus-based cryptography" by
         // Rubin-Silverberg.
         let fp6_neg_one = Fp6::from(1).neg();
-        let t = Fp12::new(self.0, fp6_neg_one).inverse().unwrap();
-        let mut c = Fp12::new(self.0, Fp6::from(1));
-        c *= t;
+        let t = Fp12::new(self.0, fp6_neg_one).invert().unwrap();
+        let c = Fp12::new(self.0, Fp6::from(1)) * t;
 
         if c.is_cyc() {
             return Some(c);
@@ -224,7 +362,7 @@ impl Fp12Compressed {
     }
 }
 
-impl crate::traits::Compress for Fp12 {
+impl Compress for Fp12 {
     fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
         let c = self.compress().unwrap();
 
@@ -245,7 +383,8 @@ impl crate::traits::Compress for Fp12 {
         let read_fp = |source: &mut dyn std::io::Read, buffer: &mut [u8; 48]| {
             source.read_exact(buffer)?;
             let fp = Fp::from_bytes_le(buffer);
-            fp.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid fp"))
+            Option::from(fp)
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid fp"))
         };
 
         let x0 = read_fp(&mut source, &mut buffer)?;
@@ -530,108 +669,15 @@ const FROBENIUS_COEFF_FP12_C1: [blst_fp2; 12] = [
     },
 ];
 
-impl Field for Fp12 {
-    fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        Fp12::new(Fp6::random(rng), Fp6::random(rng))
-    }
-
-    fn zero() -> Self {
-        Fp12::new(Fp6::zero(), Fp6::zero())
-    }
-
-    fn one() -> Self {
-        Fp12::new(Fp6::one(), Fp6::zero())
-    }
-
-    fn is_zero(&self) -> bool {
-        self.c0().is_zero() && self.c1().is_zero()
-    }
-
-    fn double(&mut self) {
-        self.0.fp6[0] = (self.c0() + self.c0()).0;
-        self.0.fp6[1] = (self.c1() + self.c1()).0;
-    }
-
-    fn negate(&mut self) {
-        *self = self.neg();
-    }
-
-    fn add_assign(&mut self, other: &Self) {
-        self.0.fp6[0] = (self.c0() + other.c0()).0;
-        self.0.fp6[1] = (self.c1() + other.c1()).0;
-    }
-
-    fn sub_assign(&mut self, other: &Self) {
-        self.0.fp6[0] = (self.c0() - other.c0()).0;
-        self.0.fp6[1] = (self.c1() - other.c1()).0;
-    }
-
-    fn frobenius_map(&mut self, power: usize) {
-        // TODO: switch to blst version when it matches
-        // unsafe { blst_fp12_frobenius_map(&mut out, &self.0, power) }
-
-        let mut c0 = self.c0();
-        c0.frobenius_map(power);
-        let mut c1 = self.c1();
-        c1.frobenius_map(power);
-
-        let mut c0_raw = blst_fp2::default();
-        let mut c1_raw = blst_fp2::default();
-        let mut c2_raw = blst_fp2::default();
-        unsafe {
-            blst_fp2_mul(
-                &mut c0_raw,
-                &c1.0.fp2[0],
-                &FROBENIUS_COEFF_FP12_C1[power % 12],
-            );
-            blst_fp2_mul(
-                &mut c1_raw,
-                &c1.0.fp2[1],
-                &FROBENIUS_COEFF_FP12_C1[power % 12],
-            );
-            blst_fp2_mul(
-                &mut c2_raw,
-                &c1.0.fp2[2],
-                &FROBENIUS_COEFF_FP12_C1[power % 12],
-            );
-        }
-        c1.0.fp2 = [c0_raw, c1_raw, c2_raw];
-
-        self.0.fp6 = [c0.0, c1.0];
-    }
-
-    fn square(&mut self) {
-        let mut out = blst_fp12::default();
-
-        unsafe { blst_fp12_sqr(&mut out, &self.0) };
-
-        self.0 = out;
-    }
-
-    fn mul_assign(&mut self, other: &Self) {
-        unsafe { blst_fp12_mul(&mut self.0, &self.0, &other.0) };
-    }
-
-    fn inverse(&self) -> Option<Self> {
-        if self.is_zero() {
-            return None;
-        }
-        let mut out = blst_fp12::default();
-
-        unsafe { blst_fp12_inverse(&mut out, &self.0) }
-
-        Some(Fp12(out))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{Fp12, G1Projective, G2Projective};
+    use super::*;
 
-    use fff::{Field, PrimeField};
-    use groupy::CurveProjective;
+    use group::{Curve, Group};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
+
+    use crate::{G1Projective, G2Projective};
 
     #[test]
     fn test_fp12_eq() {
@@ -642,7 +688,33 @@ mod tests {
 
     #[test]
     fn fp12_random_frobenius_tests() {
-        crate::tests::field::random_frobenius_tests::<Fp12, _>(crate::Fp::char(), 13);
+        use std::convert::TryFrom;
+
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let characteristic: Vec<u64> = Fp::char()
+            .chunks(8)
+            .map(|chunk| u64::from_le_bytes(<[u8; 8]>::try_from(chunk).unwrap()))
+            .collect();
+
+        let maxpower = 13;
+
+        for _ in 0..100 {
+            for i in 0..(maxpower + 1) {
+                let mut a = Fp12::random(&mut rng);
+                let mut b = a;
+
+                for _ in 0..i {
+                    a = a.pow_vartime(&characteristic);
+                }
+                b.frobenius_map(i);
+
+                assert_eq!(a, b, "{}", i);
+            }
+        }
     }
 
     #[test]
@@ -652,8 +724,6 @@ mod tests {
 
     #[test]
     fn fp12_compression() {
-        use crate::traits::Compress;
-
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
@@ -670,9 +740,9 @@ mod tests {
             }
 
             // pairing result, should be compressable
-            let p = G1Projective::random(&mut rng).into_affine();
-            let q = G2Projective::random(&mut rng).into_affine();
-            let a = crate::pairing(p, q);
+            let p = G1Projective::random(&mut rng).to_affine();
+            let q = G2Projective::random(&mut rng).to_affine();
+            let a: Fp12 = crate::pairing(&p, &q).into();
             assert!(a.is_cyc());
 
             let b = a.compress().unwrap();

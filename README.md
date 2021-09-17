@@ -17,6 +17,14 @@ Due to the assembly based nature of the implementation in `blst`, currently only
 
 To enable portable features when building the blst dependency, use the 'portable' feature: `--features portable`.
 
+
+## Benchmarking
+
+```
+$ cargo bench --features __private_bench
+```
+
+
 ## BLS12 Parameterization
 
 BLS12 curves are parameterized by a value *x* such that the base field modulus *q* and subgroup *r* can be computed by:

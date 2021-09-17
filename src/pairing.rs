@@ -1,16 +1,19 @@
-use crate::{Fp12, G1Affine, G2Affine};
+use crate::{fp12::Fp12, Compress, G1Affine, G2Affine, Gt};
+use core::ops::{Add, AddAssign};
+use ff::Field;
+use subtle::{Choice, ConditionallySelectable};
 
 use blst::*;
 
 /// Execute a complete pairing operation `(p, q)`.
-pub fn pairing(p: G1Affine, q: G2Affine) -> Fp12 {
+pub fn pairing(p: &G1Affine, q: &G2Affine) -> Gt {
     let mut tmp = blst_fp12::default();
     unsafe { blst_miller_loop(&mut tmp, &q.0, &p.0) };
 
     let mut out = blst_fp12::default();
     unsafe { blst_final_exp(&mut out, &tmp) };
 
-    out.into()
+    Gt(out)
 }
 
 macro_rules! impl_pairing {
@@ -71,7 +74,7 @@ macro_rules! impl_pairing {
                 }
             }
 
-            pub fn aggregated(gtsig: &mut Fp12, sig: &$q) {
+            pub fn aggregated(gtsig: &mut Gt, sig: &$q) {
                 unsafe { $aggregated(&mut gtsig.0, &sig.0) }
             }
 
@@ -88,7 +91,7 @@ macro_rules! impl_pairing {
                 }
             }
 
-            pub fn finalverify(&self, gtsig: Option<&Fp12>) -> bool {
+            pub fn finalverify(&self, gtsig: Option<&Gt>) -> bool {
                 unsafe {
                     blst_pairing_finalverify(
                         self.const_ctx(),
@@ -140,4 +143,71 @@ pub fn unique_messages(msgs: &[&[u8]]) -> bool {
     }
 
     true
+}
+
+/// Represents results of a Miller loop, one of the most expensive portions
+/// of the pairing function. `MillerLoopResult`s cannot be compared with each
+/// other until `.final_exponentiation()` is called, which is also expensive.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct MillerLoopResult(pub(crate) Fp12);
+
+impl ConditionallySelectable for MillerLoopResult {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        MillerLoopResult(Fp12::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
+impl Default for MillerLoopResult {
+    fn default() -> Self {
+        MillerLoopResult(Fp12::one())
+    }
+}
+
+impl pairing_lib::MillerLoopResult for MillerLoopResult {
+    type Gt = Gt;
+
+    fn final_exponentiation(&self) -> Gt {
+        let mut out = blst_fp12::default();
+        unsafe { blst_final_exp(&mut out, &(self.0).0) };
+        Gt(out)
+    }
+}
+
+impl<'a, 'b> Add<&'b MillerLoopResult> for &'a MillerLoopResult {
+    type Output = MillerLoopResult;
+
+    #[inline]
+    #[allow(clippy::suspicious_arithmetic_impl)]
+    fn add(self, rhs: &'b MillerLoopResult) -> MillerLoopResult {
+        MillerLoopResult(self.0 * rhs.0)
+    }
+}
+
+impl_add!(MillerLoopResult);
+
+impl AddAssign<MillerLoopResult> for MillerLoopResult {
+    #[inline]
+    #[allow(clippy::suspicious_op_assign_impl)]
+    fn add_assign(&mut self, rhs: MillerLoopResult) {
+        self.0 *= &rhs.0;
+    }
+}
+
+impl<'b> AddAssign<&'b MillerLoopResult> for MillerLoopResult {
+    #[inline]
+    #[allow(clippy::op_ref)]
+    fn add_assign(&mut self, rhs: &'b MillerLoopResult) {
+        *self = &*self + rhs;
+    }
+}
+
+impl Compress for MillerLoopResult {
+    fn write_compressed<W: std::io::Write>(self, out: W) -> std::io::Result<()> {
+        self.0.write_compressed(out)
+    }
+
+    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self> {
+        Ok(MillerLoopResult(Fp12::read_compressed(source)?))
+    }
 }
