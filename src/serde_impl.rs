@@ -163,13 +163,13 @@ impl Serialize for MillerLoopResult {
 impl<'de> Deserialize<'de> for Gt {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let fp12 = Fp12::deserialize(d)?;
-        Ok(Gt(fp12.0))
+        Ok(Gt(fp12))
     }
 }
 
 impl Serialize for Gt {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        Fp12(self.0).serialize(s)
+        self.0.serialize(s)
     }
 }
 

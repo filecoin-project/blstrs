@@ -11,14 +11,7 @@ use group::Group;
 use rand_core::RngCore;
 use subtle::{Choice, ConstantTimeEq};
 
-use crate::{
-    fp::Fp,
-    fp12::{Fp12, Fp12Compressed},
-    fp2::Fp2,
-    fp6::Fp6,
-    traits::Compress,
-    Scalar,
-};
+use crate::{fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, traits::Compress, Scalar};
 
 /// This is an element of $\mathbb{G}_T$, the target group of the pairing function. As with
 /// $\mathbb{G}_1$ and $\mathbb{G}_2$ this group has order $q$.
@@ -27,7 +20,7 @@ use crate::{
 /// keep code and abstractions consistent.
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(transparent)]
-pub struct Gt(pub(crate) blst_fp12);
+pub struct Gt(pub(crate) Fp12);
 
 impl fmt::Display for Gt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,13 +30,13 @@ impl fmt::Display for Gt {
 
 impl From<Fp12> for Gt {
     fn from(fp12: Fp12) -> Self {
-        Gt(fp12.0)
+        Gt(fp12)
     }
 }
 
 impl From<Gt> for Fp12 {
     fn from(gt: Gt) -> Self {
-        Fp12(gt.0)
+        gt.0
     }
 }
 
@@ -62,9 +55,9 @@ impl Neg for &Gt {
     #[inline]
     fn neg(self) -> Gt {
         // The element is unitary, so we just conjugate.
-        let mut fp12 = Fp12(self.0);
-        fp12.conjugate();
-        Gt(fp12.0)
+        let mut res = *self;
+        res.0.conjugate();
+        res
     }
 }
 
@@ -83,7 +76,7 @@ impl Add<&Gt> for &Gt {
     #[inline]
     #[allow(clippy::suspicious_arithmetic_impl)]
     fn add(self, rhs: &Gt) -> Gt {
-        Gt((Fp12(self.0) * Fp12(rhs.0)).0)
+        Gt(self.0 * rhs.0)
     }
 }
 
@@ -175,14 +168,14 @@ impl Group for Gt {
             // a valid element, which requires that it is non-zero.
             if !bool::from(out.is_zero()) {
                 unsafe { blst_final_exp(&mut out.0, &out.0) };
-                return Gt(out.0);
+                return Gt(out);
             }
         }
     }
 
     /// Returns the group identity, which is $1$.
     fn identity() -> Self {
-        Gt(Fp12::one().0)
+        Gt(Fp12::one())
     }
 
     fn generator() -> Self {
@@ -300,29 +293,69 @@ impl Group for Gt {
                     ]),
                 ),
             ),
-        )
-        .0)
+        ))
     }
 
     fn is_identity(&self) -> Choice {
-        Fp12(self.0).ct_eq(&Fp12(Self::identity().0))
+        self.0.ct_eq(&Self::identity().0)
     }
 
     #[must_use]
     fn double(&self) -> Self {
-        Gt(Fp12(self.0).square().0)
+        Gt(self.0.square())
     }
 }
 
 /// Compressed representation of `Fp12`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(transparent)]
-pub struct GtCompressed(pub(crate) Fp12Compressed);
+pub struct GtCompressed(pub(crate) Fp6);
 
 impl Gt {
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<GtCompressed> {
-        Fp12::from(self.0).compress().map(GtCompressed)
+        if !self.is_cyc() {
+            return None;
+        }
+
+        // Use torus-based compression from Section 4.1 in
+        // "On Compressible Pairings and Their Computation" by Naehrig et al.
+        let mut c0 = self.0.c0();
+
+        c0.0.fp2[0] = (c0.c0() + Fp2::from(1)).0;
+        let b = c0 * self.0.c1().invert().unwrap();
+
+        Some(GtCompressed(b))
+    }
+
+    fn is_cyc(&self) -> bool {
+        let mut t0 = self.0;
+        t0.frobenius_map(4);
+        t0 *= self.0;
+        let mut t1 = self.0;
+        t1.frobenius_map(2);
+
+        t0 == t1
+    }
+
+    fn is_in_subgroup(&self) -> bool {
+        // check z^(Phi_k(p)) == 1
+        let mut a = self.0.clone();
+        a.frobenius_map(2);
+        let mut b = a.clone();
+        b.frobenius_map(2);
+        b *= self.0;
+
+        if a != b {
+            return false;
+        }
+
+        // check z^(p+1-t) == 1
+        let mut a = self.0.clone();
+        a.frobenius_map(1);
+        let mut b = self.0.clone();
+        b.expt();
+        a == b
     }
 }
 
@@ -330,17 +363,64 @@ impl GtCompressed {
     /// Uncompress the element, returns `None` if the element is an invalid compression
     /// format.
     pub fn uncompress(self) -> Option<Gt> {
-        self.0.uncompress().map(|el| Gt(el.0))
+        // Formula for decompression for the odd q case from Section 2 in
+        // "Compression in finite fields and torus-based cryptography" by
+        // Rubin-Silverberg.
+        let fp6_neg_one = Fp6::from(1).neg();
+        let t = Fp12::new(self.0, fp6_neg_one).invert().unwrap();
+        let c = Fp12::new(self.0, Fp6::from(1)) * t;
+        let g = Gt(c);
+
+        if g.is_cyc() && g.is_in_subgroup() {
+            return Some(g);
+        }
+
+        None
     }
 }
 
 impl Compress for Gt {
-    fn write_compressed<W: std::io::Write>(self, out: W) -> std::io::Result<()> {
-        Fp12::from(self).write_compressed(out)
+    fn write_compressed<W: std::io::Write>(self, mut out: W) -> std::io::Result<()> {
+        let c = self.compress().unwrap();
+
+        out.write_all(&c.0.c0().c0().to_bytes_le())?;
+        out.write_all(&c.0.c0().c1().to_bytes_le())?;
+
+        out.write_all(&c.0.c1().c0().to_bytes_le())?;
+        out.write_all(&c.0.c1().c1().to_bytes_le())?;
+
+        out.write_all(&c.0.c2().c0().to_bytes_le())?;
+        out.write_all(&c.0.c2().c1().to_bytes_le())?;
+
+        Ok(())
     }
 
-    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self> {
-        Fp12::read_compressed(source).map(Into::into)
+    fn read_compressed<R: std::io::Read>(mut source: R) -> std::io::Result<Self> {
+        let mut buffer = [0u8; 48];
+        let read_fp = |source: &mut dyn std::io::Read, buffer: &mut [u8; 48]| {
+            source.read_exact(buffer)?;
+            let fp = Fp::from_bytes_le(buffer);
+            Option::from(fp)
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid fp"))
+        };
+
+        let x0 = read_fp(&mut source, &mut buffer)?;
+        let x1 = read_fp(&mut source, &mut buffer)?;
+
+        let y0 = read_fp(&mut source, &mut buffer)?;
+        let y1 = read_fp(&mut source, &mut buffer)?;
+
+        let z0 = read_fp(&mut source, &mut buffer)?;
+        let z1 = read_fp(&mut source, &mut buffer)?;
+
+        let x = Fp2::new(x0, x1);
+        let y = Fp2::new(y0, y1);
+        let z = Fp2::new(z0, z1);
+
+        let compressed = GtCompressed(Fp6::new(x, y, z));
+        compressed.uncompress().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid compression point")
+        })
     }
 }
 
@@ -348,10 +428,12 @@ impl Compress for Gt {
 mod tests {
     use super::*;
 
-    use group::prime::PrimeCurveAffine;
+    use group::{prime::PrimeCurveAffine, Curve};
     use pairing_lib::{Engine, MillerLoopResult, MultiMillerLoop};
+    use rand_core::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
-    use crate::{pairing, Bls12, G1Affine, G2Affine, G2Prepared};
+    use crate::{pairing, Bls12, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective};
 
     #[test]
     fn test_gt_generator() {
@@ -488,5 +570,52 @@ mod tests {
         .final_exponentiation();
 
         assert_eq!(expected, test);
+    }
+
+    #[test]
+    fn fp12_compression() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        for i in 0..100 {
+            let a = Gt::random(&mut rng);
+            // usually not cyclomatic, so not compressable
+            if let Some(b) = a.compress() {
+                let c = b.uncompress().unwrap();
+                assert_eq!(a, c, "{}", i);
+            } else {
+                println!("skipping {}", i);
+            }
+
+            // pairing result, should be compressable
+            let p = G1Projective::random(&mut rng).to_affine();
+            let q = G2Projective::random(&mut rng).to_affine();
+            let a: Gt = crate::pairing(&p, &q).into();
+            assert!(a.is_cyc());
+            assert!(a.is_in_subgroup());
+
+            let b = a.compress().unwrap();
+            let c = b.uncompress().unwrap();
+            assert_eq!(a, c, "{}", i);
+
+            let mut buffer = Vec::new();
+            a.write_compressed(&mut buffer).unwrap();
+            let out = Gt::read_compressed(std::io::Cursor::new(buffer)).unwrap();
+            assert_eq!(a, out);
+        }
+    }
+
+    #[test]
+    fn gt_subgroup() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        let p = G1Projective::random(&mut rng).to_affine();
+        let q = G2Projective::random(&mut rng).to_affine();
+        let a = crate::pairing(&p, &q);
+        assert!(a.is_in_subgroup());
     }
 }
