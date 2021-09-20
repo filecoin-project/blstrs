@@ -1,4 +1,4 @@
-use crate::{fp12::Fp12, Compress, G1Affine, G2Affine, Gt};
+use crate::{fp12::Fp12, G1Affine, G2Affine, Gt};
 use core::ops::{Add, AddAssign};
 use ff::Field;
 use subtle::{Choice, ConditionallySelectable};
@@ -13,7 +13,7 @@ pub fn pairing(p: &G1Affine, q: &G2Affine) -> Gt {
     let mut out = blst_fp12::default();
     unsafe { blst_final_exp(&mut out, &tmp) };
 
-    Gt(out)
+    Gt(Fp12(out))
 }
 
 macro_rules! impl_pairing {
@@ -75,7 +75,7 @@ macro_rules! impl_pairing {
             }
 
             pub fn aggregated(gtsig: &mut Gt, sig: &$q) {
-                unsafe { $aggregated(&mut gtsig.0, &sig.0) }
+                unsafe { $aggregated(&mut (gtsig.0).0, &sig.0) }
             }
 
             pub fn commit(&mut self) {
@@ -96,7 +96,7 @@ macro_rules! impl_pairing {
                     blst_pairing_finalverify(
                         self.const_ctx(),
                         match gtsig {
-                            Some(ref gtsig) => &gtsig.0,
+                            Some(ref gtsig) => &(gtsig.0).0,
                             None => std::ptr::null(),
                         },
                     )
@@ -170,7 +170,7 @@ impl pairing_lib::MillerLoopResult for MillerLoopResult {
     fn final_exponentiation(&self) -> Gt {
         let mut out = blst_fp12::default();
         unsafe { blst_final_exp(&mut out, &(self.0).0) };
-        Gt(out)
+        Gt(Fp12(out))
     }
 }
 
@@ -199,15 +199,5 @@ impl<'b> AddAssign<&'b MillerLoopResult> for MillerLoopResult {
     #[allow(clippy::op_ref)]
     fn add_assign(&mut self, rhs: &'b MillerLoopResult) {
         *self = &*self + rhs;
-    }
-}
-
-impl Compress for MillerLoopResult {
-    fn write_compressed<W: std::io::Write>(self, out: W) -> std::io::Result<()> {
-        self.0.write_compressed(out)
-    }
-
-    fn read_compressed<R: std::io::Read>(source: R) -> std::io::Result<Self> {
-        Ok(MillerLoopResult(Fp12::read_compressed(source)?))
     }
 }
