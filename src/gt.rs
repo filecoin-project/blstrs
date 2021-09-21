@@ -314,7 +314,7 @@ pub struct GtCompressed(pub(crate) Fp6);
 impl Gt {
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<GtCompressed> {
-        if !self.is_cyc() {
+        if !self.is_in_subgroup() {
             return None;
         }
 
@@ -329,27 +329,19 @@ impl Gt {
     }
 
     fn is_cyc(&self) -> bool {
-        let mut t0 = self.0;
-        t0.frobenius_map(4);
-        t0 *= self.0;
-        let mut t1 = self.0;
-        t1.frobenius_map(2);
-
-        t0 == t1
-    }
-
-    fn is_in_subgroup(&self) -> bool {
         // check z^(Phi_k(p)) == 1
         let mut a = self.0.clone();
         a.frobenius_map(2);
         let mut b = a.clone();
         b.frobenius_map(2);
         b *= self.0;
+        a == b
+    }
 
-        if a != b {
+    fn is_in_subgroup(&self) -> bool {
+        if !self.is_cyc() {
             return false;
         }
-
         // check z^(p+1-t) == 1
         let mut a = self.0.clone();
         a.frobenius_map(1);
@@ -371,7 +363,7 @@ impl GtCompressed {
         let c = Fp12::new(self.0, Fp6::from(1)) * t;
         let g = Gt(c);
 
-        if g.is_cyc() && g.is_in_subgroup() {
+        if g.is_in_subgroup() {
             return Some(g);
         }
 
@@ -593,7 +585,6 @@ mod tests {
             let p = G1Projective::random(&mut rng).to_affine();
             let q = G2Projective::random(&mut rng).to_affine();
             let a: Gt = crate::pairing(&p, &q).into();
-            assert!(a.is_cyc());
             assert!(a.is_in_subgroup());
 
             let b = a.compress().unwrap();
