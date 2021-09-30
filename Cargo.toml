@@ -1,7 +1,7 @@
 [package]
 name = "blstrs"
 description = "High performance implementation of BLS12 381"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
