@@ -566,7 +566,7 @@ mod tests {
             // pairing result, should be compressable
             let p = G1Projective::random(&mut rng).to_affine();
             let q = G2Projective::random(&mut rng).to_affine();
-            let a: Gt = crate::pairing(&p, &q).into();
+            let a: Gt = crate::pairing(&p, &q);
             assert!(a.is_in_subgroup());
 
             let b = a.compress().unwrap();
