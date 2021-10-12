@@ -314,10 +314,6 @@ pub struct GtCompressed(pub(crate) Fp6);
 impl Gt {
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<GtCompressed> {
-        if !self.is_in_subgroup() {
-            return None;
-        }
-
         // Use torus-based compression from Section 4.1 in
         // "On Compressible Pairings and Their Computation" by Naehrig et al.
         let mut c0 = self.0.c0();
