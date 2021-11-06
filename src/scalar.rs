@@ -534,13 +534,6 @@ impl Scalar {
         CtOption::new(Scalar(out), is_some)
     }
 
-    #[inline]
-    pub fn to_u64s_le(&self) -> [u64; 4] {
-        let mut out = [0u64; 4];
-        unsafe { blst_uint64_from_fr(out.as_mut_ptr(), &self.0) };
-        out
-    }
-
     #[allow(clippy::match_like_matches_macro)]
     pub fn is_quad_res(&self) -> Choice {
         match self.legendre() {
