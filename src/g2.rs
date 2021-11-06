@@ -409,6 +409,7 @@ impl G2Affine {
     pub const fn compressed_size() -> usize {
         COMPRESSED_SIZE
     }
+
 }
 
 /// This is an element of $\mathbb{G}_2$ represented in the projective coordinate space.

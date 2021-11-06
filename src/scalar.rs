@@ -513,6 +513,7 @@ impl Scalar {
         out.as_byte_slice().try_into().unwrap()
     }
 
+
     /// Converts an element of `Scalar` into a byte representation in
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 32] {
@@ -531,6 +532,13 @@ impl Scalar {
         unsafe { blst_fr_from_scalar(&mut out, &raw) };
 
         CtOption::new(Scalar(out), is_some)
+    }
+
+    #[inline]
+    pub fn to_u64s_le(&self) -> [u64; 4] {
+        let mut out = [0u64; 4];
+        unsafe { blst_uint64_from_fr(out.as_mut_ptr(), &self.0) };
+        out
     }
 
     #[allow(clippy::match_like_matches_macro)]
