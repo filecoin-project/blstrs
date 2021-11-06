@@ -113,3 +113,77 @@ fn bench_pairing_full(b: &mut ::test::Bencher) {
         tmp
     });
 }
+
+#[bench]
+fn bench_g1_multi_exp_naive(b: &mut ::test::Bencher) {
+    use ff::Field;
+    const SIZE: usize = 1000;
+
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+        0xbc, 0xe5,
+    ]);
+
+    let points: Vec<G1Affine> = (0..SIZE).map(|_| G1Projective::random(&mut rng).to_affine()).collect();
+    let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+    b.iter(|| {
+        let mut acc= points[0] * scalars[0];
+        for i in 1..SIZE {
+            acc += points[i] * scalars[i];
+        }
+    });
+}
+
+#[bench]
+fn bench_g1_multi_exp(b: &mut ::test::Bencher) {
+    use ff::Field;
+    const SIZE: usize = 1000;
+
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+        0xbc, 0xe5,
+    ]);
+
+    let points: Vec<G1Affine> = (0..SIZE).map(|_| G1Projective::random(&mut rng).to_affine()).collect();
+    let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+    b.iter(|| G1Projective::multi_exp(points.as_slice(), scalars.as_slice()));
+}
+
+#[bench]
+fn bench_g2_multi_exp_naive(b: &mut ::test::Bencher) {
+    use ff::Field;
+    const SIZE: usize = 1000;
+
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+        0xbc, 0xe5,
+    ]);
+
+    let points: Vec<G2Affine> = (0..SIZE).map(|_| G2Projective::random(&mut rng).to_affine()).collect();
+    let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+    b.iter(|| {
+        let mut acc= points[0] * scalars[0];
+        for i in 1..SIZE {
+            acc += points[i] * scalars[i];
+        }
+    });
+}
+
+#[bench]
+fn bench_g2_multi_exp(b: &mut ::test::Bencher) {
+    use ff::Field;
+    const SIZE: usize = 1000;
+
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+        0xbc, 0xe5,
+    ]);
+
+    let points: Vec<G2Affine> = (0..SIZE).map(|_| G2Projective::random(&mut rng).to_affine()).collect();
+    let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+    b.iter(|| G2Projective::multi_exp(points.as_slice(), scalars.as_slice()));
+}

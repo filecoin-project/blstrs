@@ -591,6 +591,21 @@ impl G2Projective {
         }
         res
     }
+
+    pub fn multi_exp(points: &[G2Affine], scalars: &[Scalar]) -> Self {
+        let points_ptrs: Vec<*const blst_p2_affine> = points.iter().map(|g| &g.0 as *const blst_p2_affine).collect();
+        
+        let scalars_bytes: Vec<[u8; 32]> = scalars.iter().map(|s| s.to_bytes_be()).collect();
+        let scalars_bytes_ptrs: Vec<*const u8> = scalars_bytes.iter().map(|s| s.as_ptr()).collect();
+
+        let scratch_size = unsafe { blst_p1s_mult_pippenger_scratch_sizeof(points.len()) };
+        let mut scratch: Vec<limb_t> = vec![0; scratch_size];
+        
+        let mut res = G2Projective(blst_p2::default());
+
+        unsafe { blst_p2s_mult_pippenger(&mut res.0 as *mut blst_p2, points_ptrs.as_ptr(), points.len(), scalars_bytes_ptrs.as_ptr(), 255, scratch.as_mut_ptr()) };
+        res
+    }
 }
 
 impl Group for G2Projective {
@@ -1316,5 +1331,26 @@ mod tests {
             assert_eq!(G2Projective::from_bytes(&c).unwrap(), el);
             assert_eq!(G2Projective::from_bytes_unchecked(&c).unwrap(), el);
         }
+    }
+    
+    #[test]
+    fn test_multi_exp() {
+        const SIZE: usize = 10;
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let points: Vec<G2Affine> = (0..SIZE).map(|_| G2Projective::random(&mut rng).to_affine()).collect();
+        let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+        let mut naive = points[0] * scalars[0];
+        for i in 1..SIZE {
+            naive += points[i] * scalars[i];
+        }
+
+        let pippenger = G2Projective::multi_exp(points.as_slice(), scalars.as_slice());
+
+        assert_eq!(naive, pippenger);
     }
 }
