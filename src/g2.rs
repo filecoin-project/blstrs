@@ -595,7 +595,7 @@ impl G2Projective {
     pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
         let n = if points.len() < scalars.len() { points.len() } else { scalars.len() };
 
-        let points: Vec<blst_p2> = points.iter().map(|g| g.0).collect();
+        let points: Vec<blst_p2> = points.iter().take(n).map(|g| g.0).collect();
         let points = p2_affines::from(points.as_slice());
 
         let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
@@ -603,7 +603,7 @@ impl G2Projective {
             scalar_bytes.extend_from_slice(&a);
         }
 
-        let res = points.mult(scalar_bytes.as_slice(), 256);
+        let res = points.mult(scalar_bytes.as_slice(), 255);
 
         G2Projective(res)
     }
@@ -1336,7 +1336,7 @@ mod tests {
     
     #[test]
     fn test_multi_exp() {
-        const SIZE: usize = 10;
+        const SIZE: usize = 128;
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,

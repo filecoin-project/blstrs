@@ -627,7 +627,7 @@ impl G1Projective {
     pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
         let n = if points.len() < scalars.len() { points.len() } else { scalars.len() };
 
-        let points: Vec<blst_p1> = points.iter().map(|g| g.0).collect();
+        let points: Vec<blst_p1> = points.iter().take(n).map(|g| g.0).collect();
         let points = p1_affines::from(points.as_slice());
 
         let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
@@ -635,7 +635,7 @@ impl G1Projective {
             scalar_bytes.extend_from_slice(&a);
         }
 
-        let res = points.mult(scalar_bytes.as_slice(), 256);
+        let res = points.mult(scalar_bytes.as_slice(), 255);
 
         G1Projective(res)
     }
