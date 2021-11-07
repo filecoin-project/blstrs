@@ -124,7 +124,7 @@ fn bench_g1_multi_exp_naive(b: &mut ::test::Bencher) {
         0xbc, 0xe5,
     ]);
 
-    let points: Vec<G1Affine> = (0..SIZE).map(|_| G1Projective::random(&mut rng).to_affine()).collect();
+    let points: Vec<G1Projective> = (0..SIZE).map(|_| G1Projective::random(&mut rng)).collect();
     let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
 
     b.iter(|| {
@@ -145,7 +145,7 @@ fn bench_g1_multi_exp(b: &mut ::test::Bencher) {
         0xbc, 0xe5,
     ]);
 
-    let points: Vec<G1Affine> = (0..SIZE).map(|_| G1Projective::random(&mut rng).to_affine()).collect();
+    let points: Vec<G1Projective> = (0..SIZE).map(|_| G1Projective::random(&mut rng)).collect();
     let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
 
     b.iter(|| G1Projective::multi_exp(points.as_slice(), scalars.as_slice()));
@@ -161,7 +161,7 @@ fn bench_g2_multi_exp_naive(b: &mut ::test::Bencher) {
         0xbc, 0xe5,
     ]);
 
-    let points: Vec<G2Affine> = (0..SIZE).map(|_| G2Projective::random(&mut rng).to_affine()).collect();
+    let points: Vec<G2Projective> = (0..SIZE).map(|_| G2Projective::random(&mut rng)).collect();
     let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
 
     b.iter(|| {
@@ -182,7 +182,7 @@ fn bench_g2_multi_exp(b: &mut ::test::Bencher) {
         0xbc, 0xe5,
     ]);
 
-    let points: Vec<G2Affine> = (0..SIZE).map(|_| G2Projective::random(&mut rng).to_affine()).collect();
+    let points: Vec<G2Projective> = (0..SIZE).map(|_| G2Projective::random(&mut rng)).collect();
     let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
 
     b.iter(|| G2Projective::multi_exp(points.as_slice(), scalars.as_slice()));
