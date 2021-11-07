@@ -624,19 +624,20 @@ impl G1Projective {
         res
     }
 
-    pub fn multi_exp(points: &[G1Affine], scalars: &[Scalar]) -> Self {
-        let points_ptrs: Vec<*const blst_p1_affine> = points.iter().map(|g| &g.0 as *const blst_p1_affine).collect();
-        
-        let scalars_bytes: Vec<[u8; 32]> = scalars.iter().map(|s| s.to_bytes_be()).collect();
-        let scalars_bytes_ptrs: Vec<*const u8> = scalars_bytes.iter().map(|s| s.as_ptr()).collect();
+    pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
+        let n = if points.len() < scalars.len() { points.len() } else { scalars.len() };
 
-        let scratch_size = unsafe { blst_p1s_mult_pippenger_scratch_sizeof(points.len()) };
-        let mut scratch: Vec<limb_t> = vec![0; scratch_size];
-        
-        let mut res = G1Projective(blst_p1::default());
+        let points: Vec<blst_p1> = points.iter().map(|g| g.0).collect();
+        let points = p1_affines::from(points.as_slice());
 
-        unsafe { blst_p1s_mult_pippenger(&mut res.0 as *mut blst_p1, points_ptrs.as_ptr(), points.len(), scalars_bytes_ptrs.as_ptr(), 255, scratch.as_mut_ptr()) };
-        res
+        let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
+        for a in scalars.iter().map(|s| s.to_bytes_le()) {
+            scalar_bytes.extend_from_slice(&a);
+        }
+
+        let res = points.mult(scalar_bytes.as_slice(), 256);
+
+        G1Projective(res)
     }
 }
 
@@ -1399,7 +1400,7 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        let points: Vec<G1Affine> = (0..SIZE).map(|_| G1Projective::random(&mut rng).to_affine()).collect();
+        let points: Vec<G1Projective> = (0..SIZE).map(|_| G1Projective::random(&mut rng)).collect();
         let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
 
         let mut naive = points[0] * scalars[0];
