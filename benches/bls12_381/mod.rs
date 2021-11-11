@@ -117,7 +117,7 @@ fn bench_pairing_full(b: &mut ::test::Bencher) {
 #[bench]
 fn bench_g1_multi_exp_naive(b: &mut ::test::Bencher) {
     use ff::Field;
-    const SIZE: usize = 1000;
+    const SIZE: usize = 256;
 
     let mut rng = XorShiftRng::from_seed([
         0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
@@ -138,7 +138,7 @@ fn bench_g1_multi_exp_naive(b: &mut ::test::Bencher) {
 #[bench]
 fn bench_g1_multi_exp(b: &mut ::test::Bencher) {
     use ff::Field;
-    const SIZE: usize = 1000;
+    const SIZE: usize = 256;
 
     let mut rng = XorShiftRng::from_seed([
         0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
@@ -154,7 +154,7 @@ fn bench_g1_multi_exp(b: &mut ::test::Bencher) {
 #[bench]
 fn bench_g2_multi_exp_naive(b: &mut ::test::Bencher) {
     use ff::Field;
-    const SIZE: usize = 1000;
+    const SIZE: usize = 256;
 
     let mut rng = XorShiftRng::from_seed([
         0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
@@ -175,7 +175,7 @@ fn bench_g2_multi_exp_naive(b: &mut ::test::Bencher) {
 #[bench]
 fn bench_g2_multi_exp(b: &mut ::test::Bencher) {
     use ff::Field;
-    const SIZE: usize = 1000;
+    const SIZE: usize = 256;
 
     let mut rng = XorShiftRng::from_seed([
         0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,

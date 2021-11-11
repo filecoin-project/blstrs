@@ -595,8 +595,10 @@ impl G2Projective {
     pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
         let n = if points.len() < scalars.len() { points.len() } else { scalars.len() };
 
-        let points: Vec<blst_p2> = points.iter().take(n).map(|g| g.0).collect();
-        let points = p2_affines::from(points.as_slice());
+        let points = unsafe {
+            std::slice::from_raw_parts(points.as_ptr() as *const blst_p2, points.len())
+        };
+        let points = p2_affines::from(points);
 
         let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
         for a in scalars.iter().map(|s| s.to_bytes_le()) {
