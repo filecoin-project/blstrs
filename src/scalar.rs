@@ -1759,4 +1759,30 @@ mod tests {
             assert_eq!(b1, b2);
         }
     }
+
+    #[test]
+    fn m1_inv_bug() {
+        // This fails on aarch64-darwin.
+        let bad = Scalar::zero() - Scalar::from(7);
+
+        let inv = bad.invert().unwrap();
+        let check = inv * bad;
+        assert_eq!(Scalar::one(), check);
+    }
+    #[test]
+    fn m1_inv_bug_more() {
+        let mut bad = Vec::new();
+        for i in 1..1000000 {
+            // Ensure that a * a^-1 = 1
+            let a = Scalar::zero() - Scalar::from(i);
+            let ainv = a.invert().unwrap();
+            let check = a * ainv;
+            let one = Scalar::one();
+
+            if check != one {
+                bad.push((i, a));
+            }
+        }
+        assert_eq!(0, bad.len());
+    }
 }
