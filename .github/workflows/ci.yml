@@ -30,11 +30,6 @@ jobs:
             rust: nightly
             arch: aarch64
 
-          # 64-bit Linux/arm64
-          - target: aarch64-unknown-linux-gnu
-            rust: nightly
-            arch: aarch64
-
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
@@ -57,6 +52,8 @@ jobs:
           
           run: |
             $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }}
+            $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }}
+
   # Linux tests
   linux:
     needs: set-msrv
@@ -90,6 +87,7 @@ jobs:
         run: sudo apt-get install -y ocl-icd-opencl-dev
       - run: ${{ matrix.deps }}
       - run: cargo test --target ${{ matrix.target }}
+      - run: cargo test --target ${{ matrix.target }} --features portable
 
   # macOS tests
   macos:
@@ -110,6 +108,7 @@ jobs:
           target: x86_64-apple-darwin
           override: true
       - run: cargo test
+      - run: cargo test --features portable
 
  # Windows tests
   windows:
@@ -117,7 +116,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-pc-windows-gnu
+          # 64-bit Windows (MSVC)
+          - target: x86_64-pc-windows-msvc
             toolchain: stable
 
     runs-on: windows-latest
@@ -131,6 +131,7 @@ jobs:
           override: true
       - uses: msys2/setup-msys2@v2
       - run: cargo test --target ${{ matrix.target }}
+      - run: cargo test --target ${{ matrix.target }} --features portable
 
   clippy_check:
     runs-on: ubuntu-latest
