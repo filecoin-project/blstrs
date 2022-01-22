@@ -1785,4 +1785,38 @@ mod tests {
         }
         assert_eq!(0, bad.len());
     }
+
+    fn scalar_from_u64s(parts: [u64; 4]) -> Scalar {
+        let mut le_bytes = [0u8; 32];
+        le_bytes[0..8].copy_from_slice(&parts[0].to_le_bytes());
+        le_bytes[8..16].copy_from_slice(&parts[1].to_le_bytes());
+        le_bytes[16..24].copy_from_slice(&parts[2].to_le_bytes());
+        le_bytes[24..32].copy_from_slice(&parts[3].to_le_bytes());
+        let mut repr = <Scalar as PrimeField>::Repr::default();
+        repr.as_mut().copy_from_slice(&le_bytes[..]);
+        Scalar::from_repr_vartime(repr).expect("u64s exceed BLS12-381 scalar field modulus")
+    }
+
+    #[test]
+    fn m1_inv_bug_special() {
+        let maybe_bad = [scalar_from_u64s([
+            0xb3fb72ea181b4e82,
+            0x9435fcaf3a85c901,
+            0x9eaf4fa6b9635037,
+            0x2164d020b3bd14cc,
+        ])];
+
+        let mut yep_bad = Vec::new();
+
+        for a in maybe_bad.iter() {
+            let ainv = a.invert().unwrap();
+            let check = a * ainv;
+            let one = Scalar::one();
+
+            if check != one {
+                yep_bad.push(a);
+            }
+        }
+        assert_eq!(0, yep_bad.len());
+    }
 }
