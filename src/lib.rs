@@ -8,8 +8,6 @@
 
 #[cfg(not(target_endian = "little"))]
 compile_error!("blstrs is only supported on little endian architectures");
-#[cfg(not(target_pointer_width = "64"))]
-compile_error!("blstrs is only supported on 64bit architectures");
 
 #[macro_use]
 mod macros;
