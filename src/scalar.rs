@@ -40,19 +40,6 @@ const MODULUS: [u64; 4] = [
     0x73ed_a753_299d_7d48,
 ];
 
-/// The modulus as u32 limbs.
-#[cfg(not(target_pointer_width = "64"))]
-const MODULUS_LIMBS_32: [u32; 8] = [
-    0x0000_0001,
-    0xffff_ffff,
-    0xfffe_5bfe,
-    0x53bd_a402,
-    0x09a1_d805,
-    0x3339_d808,
-    0x299d_7d48,
-    0x73ed_a753,
-];
-
 // Little-endian non-Montgomery form not reduced mod p.
 const MODULUS_REPR: [u8; 32] = [
     0x01, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x5b, 0xfe, 0xff, 0x02, 0xa4, 0xbd, 0x53,
