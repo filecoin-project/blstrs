@@ -9,7 +9,6 @@ use core::{
 };
 
 use blst::*;
-use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -478,48 +477,19 @@ impl PrimeField for Scalar {
     }
 }
 
-#[cfg(not(target_pointer_width = "64"))]
-type ReprBits = [u32; 8];
-
-#[cfg(target_pointer_width = "64")]
-type ReprBits = [u64; 4];
-
 impl PrimeFieldBits for Scalar {
     // Representation in non-Montgomery form.
-    type ReprBits = ReprBits;
+    type ReprBits = [u8; 32];
 
-    #[cfg(target_pointer_width = "64")]
     fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
-        let mut limbs = [0u64; 4];
-        unsafe { blst_uint64_from_fr(limbs.as_mut_ptr(), &self.0) };
+        let mut out = blst_scalar::default();
+        unsafe { blst_scalar_from_fr(&mut out, &self.0) };
 
-        FieldBits::new(limbs)
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
-        let bytes = self.to_bytes_le();
-        let limbs = [
-            u32::from_le_bytes(bytes[0..4].try_into().unwrap()),
-            u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
-            u32::from_le_bytes(bytes[8..12].try_into().unwrap()),
-            u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
-            u32::from_le_bytes(bytes[16..20].try_into().unwrap()),
-            u32::from_le_bytes(bytes[20..24].try_into().unwrap()),
-            u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
-            u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
-        ];
-        FieldBits::new(limbs)
+        FieldBits::new(out.b)
     }
 
     fn char_le_bits() -> FieldBits<Self::ReprBits> {
-        #[cfg(not(target_pointer_width = "64"))]
-        {
-            FieldBits::new(MODULUS_LIMBS_32)
-        }
-
-        #[cfg(target_pointer_width = "64")]
-        FieldBits::new(MODULUS)
+        FieldBits::new(MODULUS_REPR)
     }
 }
 
@@ -527,13 +497,11 @@ impl Scalar {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes_le(bytes: &[u8; 32]) -> CtOption<Scalar> {
-        let is_some =
-            Choice::from(unsafe { blst_scalar_fr_check(&blst_scalar { b: *bytes }) as u8 });
-
+        let s = bytes.as_ptr() as *const blst_scalar;
+        let is_some = Choice::from(unsafe { blst_scalar_fr_check(s) as u8 });
         let mut out = blst_fr::default();
-        let bytes_u64 = u64s_from_bytes(bytes);
 
-        unsafe { blst_fr_from_uint64(&mut out, bytes_u64.as_ptr()) };
+        unsafe { blst_fr_from_scalar(&mut out, s) };
 
         CtOption::new(Scalar(out), is_some)
     }
@@ -550,9 +518,9 @@ impl Scalar {
     /// little-endian byte order.
     #[inline]
     pub fn to_bytes_le(&self) -> [u8; 32] {
-        let mut out = [0u64; 4];
-        unsafe { blst_uint64_from_fr(out.as_mut_ptr(), &self.0) };
-        out.as_byte_slice().try_into().unwrap()
+        let mut out = blst_scalar::default();
+        unsafe { blst_scalar_from_fr(&mut out, &self.0) };
+        out.b
     }
 
     /// Converts an element of `Scalar` into a byte representation in
