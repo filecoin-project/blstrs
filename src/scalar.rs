@@ -41,6 +41,19 @@ const MODULUS: [u64; 4] = [
     0x73ed_a753_299d_7d48,
 ];
 
+/// The modulus as u32 limbs.
+#[cfg(not(target_pointer_width = "64"))]
+const MODULUS_LIMBS_32: [u32; 8] = [
+    0x0000_0001,
+    0xffff_ffff,
+    0xfffe_5bfe,
+    0x53bd_a402,
+    0x09a1_d805,
+    0x3339_d808,
+    0x299d_7d48,
+    0x73ed_a753,
+];
+
 // Little-endian non-Montgomery form not reduced mod p.
 const MODULUS_REPR: [u8; 32] = [
     0x01, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x5b, 0xfe, 0xff, 0x02, 0xa4, 0xbd, 0x53,
@@ -465,10 +478,17 @@ impl PrimeField for Scalar {
     }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
+type ReprBits = [u32; 8];
+
+#[cfg(target_pointer_width = "64")]
+type ReprBits = [u64; 4];
+
 impl PrimeFieldBits for Scalar {
     // Representation in non-Montgomery form.
-    type ReprBits = [u64; 4];
+    type ReprBits = ReprBits;
 
+    #[cfg(target_pointer_width = "64")]
     fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
         let mut limbs = [0u64; 4];
         unsafe { blst_uint64_from_fr(limbs.as_mut_ptr(), &self.0) };
@@ -476,7 +496,29 @@ impl PrimeFieldBits for Scalar {
         FieldBits::new(limbs)
     }
 
+    #[cfg(not(target_pointer_width = "64"))]
+    fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
+        let bytes = self.to_bytes_le();
+        let limbs = [
+            u32::from_le_bytes(bytes[0..4].try_into().unwrap()),
+            u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
+            u32::from_le_bytes(bytes[8..12].try_into().unwrap()),
+            u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
+            u32::from_le_bytes(bytes[16..20].try_into().unwrap()),
+            u32::from_le_bytes(bytes[20..24].try_into().unwrap()),
+            u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+            u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
+        ];
+        FieldBits::new(limbs)
+    }
+
     fn char_le_bits() -> FieldBits<Self::ReprBits> {
+        #[cfg(not(target_pointer_width = "64"))]
+        {
+            FieldBits::new(MODULUS_LIMBS_32)
+        }
+
+        #[cfg(target_pointer_width = "64")]
         FieldBits::new(MODULUS)
     }
 }
@@ -1759,5 +1801,65 @@ mod tests {
         for (b1, b2) in neg1_bits.zip(modulus_bits) {
             assert_eq!(b1, b2);
         }
+    }
+
+    #[test]
+    fn m1_inv_bug() {
+        // This fails on aarch64-darwin.
+        let bad = Scalar::zero() - Scalar::from(7);
+
+        let inv = bad.invert().unwrap();
+        let check = inv * bad;
+        assert_eq!(Scalar::one(), check);
+    }
+    #[test]
+    fn m1_inv_bug_more() {
+        let mut bad = Vec::new();
+        for i in 1..1000000 {
+            // Ensure that a * a^-1 = 1
+            let a = Scalar::zero() - Scalar::from(i);
+            let ainv = a.invert().unwrap();
+            let check = a * ainv;
+            let one = Scalar::one();
+
+            if check != one {
+                bad.push((i, a));
+            }
+        }
+        assert_eq!(0, bad.len());
+    }
+
+    fn scalar_from_u64s(parts: [u64; 4]) -> Scalar {
+        let mut le_bytes = [0u8; 32];
+        le_bytes[0..8].copy_from_slice(&parts[0].to_le_bytes());
+        le_bytes[8..16].copy_from_slice(&parts[1].to_le_bytes());
+        le_bytes[16..24].copy_from_slice(&parts[2].to_le_bytes());
+        le_bytes[24..32].copy_from_slice(&parts[3].to_le_bytes());
+        let mut repr = <Scalar as PrimeField>::Repr::default();
+        repr.as_mut().copy_from_slice(&le_bytes[..]);
+        Scalar::from_repr_vartime(repr).expect("u64s exceed BLS12-381 scalar field modulus")
+    }
+
+    #[test]
+    fn m1_inv_bug_special() {
+        let maybe_bad = [scalar_from_u64s([
+            0xb3fb72ea181b4e82,
+            0x9435fcaf3a85c901,
+            0x9eaf4fa6b9635037,
+            0x2164d020b3bd14cc,
+        ])];
+
+        let mut yep_bad = Vec::new();
+
+        for a in maybe_bad.iter() {
+            let ainv = a.invert().unwrap();
+            let check = a * ainv;
+            let one = Scalar::one();
+
+            if check != one {
+                yep_bad.push(a);
+            }
+        }
+        assert_eq!(0, yep_bad.len());
     }
 }
