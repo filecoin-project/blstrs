@@ -625,10 +625,13 @@ impl G1Projective {
     }
 
     pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
-        let n = if points.len() < scalars.len() { points.len() } else { scalars.len() };
-        let points = unsafe {
-            std::slice::from_raw_parts(points.as_ptr() as *const blst_p1, points.len())
+        let n = if points.len() < scalars.len() {
+            points.len()
+        } else {
+            scalars.len()
         };
+        let points =
+            unsafe { std::slice::from_raw_parts(points.as_ptr() as *const blst_p1, points.len()) };
 
         let points = p1_affines::from(points);
 

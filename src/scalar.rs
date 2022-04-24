@@ -555,7 +555,6 @@ impl Scalar {
         out.as_byte_slice().try_into().unwrap()
     }
 
-
     /// Converts an element of `Scalar` into a byte representation in
     /// big-endian byte order.
     pub fn to_bytes_be(&self) -> [u8; 32] {
