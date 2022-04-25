@@ -4,7 +4,7 @@ mod g1 {
 
     use blstrs::*;
     use ff::Field;
-    use group::{prime::PrimeCurveAffine, Group};
+    use group::Group;
 
     #[bench]
     fn bench_g1_mul_assign(b: &mut ::test::Bencher) {
