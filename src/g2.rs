@@ -591,6 +591,8 @@ impl G2Projective {
         res
     }
 
+    /// Perform a multi-exponentiation, aka "multi-scalar-multiplication" (MSM) using `blst`'s implementation of Pippenger's algorithm.
+    /// Note: `scalars` is cloned in this method.
     pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
         let n = if points.len() < scalars.len() {
             points.len()
