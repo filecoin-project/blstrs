@@ -679,6 +679,13 @@ impl Scalar {
 }
 
 #[cfg(feature = "gpu")]
+impl ec_gpu::GpuName for Scalar {
+    fn name() -> String {
+        ec_gpu::name!()
+    }
+}
+
+#[cfg(feature = "gpu")]
 impl ec_gpu::GpuField for Scalar {
     fn one() -> Vec<u32> {
         crate::u64_to_u32(&R.0.l[..])

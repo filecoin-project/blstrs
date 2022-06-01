@@ -657,6 +657,13 @@ impl Fp {
 }
 
 #[cfg(feature = "gpu")]
+impl ec_gpu::GpuName for Fp {
+    fn name() -> String {
+        ec_gpu::name!()
+    }
+}
+
+#[cfg(feature = "gpu")]
 impl ec_gpu::GpuField for Fp {
     fn one() -> Vec<u32> {
         crate::u64_to_u32(&R.0.l[..])
