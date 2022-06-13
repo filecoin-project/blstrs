@@ -590,6 +590,29 @@ impl G2Projective {
         }
         res
     }
+
+    /// Perform a multi-exponentiation, aka "multi-scalar-multiplication" (MSM) using `blst`'s implementation of Pippenger's algorithm.
+    /// Note: `scalars` is cloned in this method.
+    pub fn multi_exp(points: &[Self], scalars: &[Scalar]) -> Self {
+        let n = if points.len() < scalars.len() {
+            points.len()
+        } else {
+            scalars.len()
+        };
+
+        let points =
+            unsafe { std::slice::from_raw_parts(points.as_ptr() as *const blst_p2, points.len()) };
+        let points = p2_affines::from(points);
+
+        let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
+        for a in scalars.iter().map(|s| s.to_bytes_le()) {
+            scalar_bytes.extend_from_slice(&a);
+        }
+
+        let res = points.mult(scalar_bytes.as_slice(), 255);
+
+        G2Projective(res)
+    }
 }
 
 impl Group for G2Projective {
@@ -1315,5 +1338,26 @@ mod tests {
             assert_eq!(G2Projective::from_bytes(&c).unwrap(), el);
             assert_eq!(G2Projective::from_bytes_unchecked(&c).unwrap(), el);
         }
+    }
+
+    #[test]
+    fn test_multi_exp() {
+        const SIZE: usize = 128;
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let points: Vec<G2Projective> = (0..SIZE).map(|_| G2Projective::random(&mut rng)).collect();
+        let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+        let mut naive = points[0] * scalars[0];
+        for i in 1..SIZE {
+            naive += points[i] * scalars[i];
+        }
+
+        let pippenger = G2Projective::multi_exp(points.as_slice(), scalars.as_slice());
+
+        assert_eq!(naive, pippenger);
     }
 }
