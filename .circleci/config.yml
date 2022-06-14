@@ -113,8 +113,13 @@ jobs:
   test_arm:
     executor: arm
     steps:
-      - *restore-workspace
-      - *restore-cache
+      - checkout
+      - run:
+          name: Install Rust
+          command: |
+            curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - run: rustup install $(cat rust-toolchain)
+      - run: rustup default $(cat rust-toolchain)
       - run:
           name: Run cargo test
           command: cargo test --release --workspace
