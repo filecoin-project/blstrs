@@ -51,7 +51,7 @@ jobs:
             source $HOME/.cargo/env
           
           run: |
-            $HOME/.cargo/bin/cargo generate-lockfile
+            strace $HOME/.cargo/bin/cargo generate-lockfile
             $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }} --verbose
             $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }} --verbose
 
