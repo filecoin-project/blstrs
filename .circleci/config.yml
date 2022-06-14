@@ -14,6 +14,10 @@ executors:
       - image: filecoin/rust:latest
     working_directory: /mnt/crate
     resource_class: 2xlarge
+  arm:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
 
 restore-workspace: &restore-workspace
   attach_workspace:
@@ -105,6 +109,18 @@ jobs:
       - run:
           name: Run cargo test
           command: cargo test --features portable --workspace
+
+  test_arm:
+    executor: arm
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run:
+          name: Run cargo test
+          command: cargo test --release --workspace
+      - run:
+          name: Run cargo test portable
+          command: cargo test --release --workspace --features portable
 
   check_gpu:
     executor: default
