@@ -214,8 +214,6 @@ workflows:
           requires:
             - cargo_fetch
       - test_arm:
-          requires:
-            - cargo_fetch
       - check_gpu:
           requires:
             - cargo_fetch
