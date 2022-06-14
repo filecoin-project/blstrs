@@ -119,7 +119,6 @@ jobs:
           command: |
             curl https://sh.rustup.rs -sSf | sh -s -- -y
       - run: rustup install --profile minimal $(cat rust-toolchain)
-      - run: rustup default $(cat rust-toolchain)
       - run:
           name: Run cargo test
           command: cargo test --release --workspace
