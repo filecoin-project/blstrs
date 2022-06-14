@@ -51,8 +51,6 @@ jobs:
             source $HOME/.cargo/env
           
           run: |
-            set -x
-            cat /home/runner/work/_actions/uraimo/run-on-arch-action/v2.1.1/src/run-on-arch-commands.sh
             $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }}
             $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }}
 
