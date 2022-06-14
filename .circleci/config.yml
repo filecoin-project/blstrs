@@ -117,7 +117,7 @@ jobs:
       - run:
           name: Install Rust
           command: |
-            curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal -y
+            curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain $(cat rust-toolchain) -y
       - run:
           name: Run cargo test
           command: cargo test --release --workspace
@@ -211,7 +211,7 @@ workflows:
       - test_portable:
           requires:
             - cargo_fetch
-      - test_arm:
+      - test_arm
       - check_gpu:
           requires:
             - cargo_fetch
