@@ -14,6 +14,10 @@ executors:
       - image: filecoin/rust:latest
     working_directory: /mnt/crate
     resource_class: 2xlarge
+  arm:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
 
 restore-workspace: &restore-workspace
   attach_workspace:
@@ -106,6 +110,21 @@ jobs:
           name: Run cargo test
           command: cargo test --features portable --workspace
 
+  test_arm:
+    executor: arm
+    steps:
+      - checkout
+      - run:
+          name: Install Rust
+          command: |
+            curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain $(cat rust-toolchain) -y
+      - run:
+          name: Run cargo test
+          command: cargo test --workspace
+      - run:
+          name: Run cargo test portable
+          command: cargo test --workspace --features portable
+
   check_gpu:
     executor: default
     steps:
@@ -192,6 +211,7 @@ workflows:
       - test_portable:
           requires:
             - cargo_fetch
+      - test_arm
       - check_gpu:
           requires:
             - cargo_fetch
