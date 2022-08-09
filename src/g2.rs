@@ -777,6 +777,13 @@ impl PairingCurveAffine for G2Affine {
     }
 }
 
+#[cfg(feature = "gpu")]
+impl ec_gpu::GpuName for G2Affine {
+    fn name() -> String {
+        ec_gpu::name!()
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(transparent)]
 pub struct G2Uncompressed([u8; UNCOMPRESSED_SIZE]);
