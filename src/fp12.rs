@@ -303,6 +303,13 @@ impl Fp12 {
     }
 }
 
+#[cfg(feature = "gpu")]
+impl ec_gpu::GpuName for Fp12 {
+    fn name() -> String {
+        ec_gpu::name!()
+    }
+}
+
 // non_residue^((modulus^i-1)/6) for i=0,...,11
 const FROBENIUS_COEFF_FP12_C1: [blst_fp2; 12] = [
     // Fp2(u + 1)**(((q^0) - 1) / 6)

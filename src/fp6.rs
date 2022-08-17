@@ -401,6 +401,13 @@ impl Fp6 {
     }
 }
 
+#[cfg(feature = "gpu")]
+impl ec_gpu::GpuName for Fp6 {
+    fn name() -> String {
+        ec_gpu::name!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
