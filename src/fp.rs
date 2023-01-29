@@ -31,12 +31,12 @@ const MODULUS_REPR: [u8; 48] = [
     0xd7, 0xac, 0x4b, 0x43, 0xb6, 0xa7, 0x1b, 0x4b, 0x9a, 0xe6, 0x7f, 0x39, 0xea, 0x11, 0x01, 0x1a,
 ];
 
-const ZERO: Fp = Fp(blst_fp {
+pub const ZERO: Fp = Fp(blst_fp {
     l: [0, 0, 0, 0, 0, 0],
 });
 
 /// R = 2^384 mod p
-const R: Fp = Fp(blst_fp {
+pub const R: Fp = Fp(blst_fp {
     l: [
         0x7609_0000_0002_fffd,
         0xebf4_000b_c40c_0002,
