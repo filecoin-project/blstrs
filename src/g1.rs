@@ -1426,4 +1426,30 @@ mod tests {
 
         assert_eq!(naive, pippenger);
     }
+
+    #[test]
+    fn test_multi_exp_with_zero() {
+        const NON_ZERO: usize = 7;
+        const ZERO_POINTS: usize = 3;
+        const SIZE: usize = NON_ZERO + ZERO_POINTS;
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let points: Vec<G1Projective> = (0..NON_ZERO)
+            .map(|_| G1Projective::random(&mut rng))
+            .chain(vec![G1Projective::identity(); ZERO_POINTS].into_iter())
+            .collect();
+        let scalars: Vec<Scalar> = (0..SIZE).map(|_| Scalar::random(&mut rng)).collect();
+
+        let mut naive = points[0] * scalars[0];
+        for i in 1..SIZE {
+            naive += points[i] * scalars[i];
+        }
+
+        let pippenger = G1Projective::multi_exp(points.as_slice(), scalars.as_slice());
+
+        assert_eq!(naive, pippenger);
+    }
 }
