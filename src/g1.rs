@@ -71,6 +71,12 @@ impl From<G1Projective> for G1Affine {
     }
 }
 
+impl From<blst_p1_affine> for G1Affine {
+    fn from(p: blst_p1_affine) -> G1Affine {
+        G1Affine(p)
+    }
+}
+
 impl AsRef<blst_p1_affine> for G1Affine {
     fn as_ref(&self) -> &blst_p1_affine {
         &self.0
@@ -490,6 +496,12 @@ impl From<&G1Affine> for G1Projective {
 impl From<G1Affine> for G1Projective {
     fn from(p: G1Affine) -> G1Projective {
         G1Projective::from(&p)
+    }
+}
+
+impl From<blst_p1> for G1Projective {
+    fn from(p: blst_p1) -> G1Projective {
+        G1Projective(p)
     }
 }
 
