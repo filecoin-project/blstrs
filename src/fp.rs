@@ -1193,7 +1193,7 @@ mod tests {
             // Exponentiate by various small numbers and ensure it consists with repeated
             // multiplication.
             let a = Fp::random(&mut rng);
-            let target = a.pow_vartime(&[i]);
+            let target = a.pow_vartime([i]);
             let mut c = Fp::ONE;
             for _ in 0..i {
                 c.mul_assign(&a);

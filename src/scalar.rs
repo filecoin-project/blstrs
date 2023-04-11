@@ -389,7 +389,7 @@ impl Field for Scalar {
 
         // w = self^((t - 1) // 2)
         //   = self^6104339283789297388802252303364915521546564123189034618274734669823
-        let w = self.pow_vartime(&[
+        let w = self.pow_vartime([
             0x7fff_2dff_7fff_ffff,
             0x04d0_ec02_a9de_d201,
             0x94ce_bea4_199c_ec04,
@@ -1060,7 +1060,7 @@ mod tests {
 
         for _ in 0..100 {
             r1 = r1.invert().unwrap();
-            r2 = r2.pow_vartime(&q_minus_2);
+            r2 = r2.pow_vartime(q_minus_2);
 
             assert_eq!(r1, r2);
             // Add R so we check something different next time around
@@ -1635,7 +1635,7 @@ mod tests {
             // Exponentiate by various small numbers and ensure it consists with repeated
             // multiplication.
             let a = Scalar::random(&mut rng);
-            let target = a.pow_vartime(&[i]);
+            let target = a.pow_vartime([i]);
             let mut c = Scalar::ONE;
             for _ in 0..i {
                 c.mul_assign(&a);
@@ -1647,7 +1647,7 @@ mod tests {
             // Exponentiating by the modulus should have no effect in a prime field.
             let a = Scalar::random(&mut rng);
 
-            assert_eq!(a, a.pow_vartime(&MODULUS));
+            assert_eq!(a, a.pow_vartime(MODULUS));
         }
     }
 
