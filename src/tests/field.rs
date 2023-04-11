@@ -19,14 +19,14 @@ pub fn random_sqrt_tests<F: Field>() {
         assert!(a == a_again || a == -a_again);
     }
 
-    let mut c = F::one();
+    let mut c = F::ONE;
     for _ in 0..10000 {
         let c_sq = c.square();
         let c_again = c_sq.sqrt();
         assert_eq!(c_again.is_some().unwrap_u8(), 1);
         let c_again = c_again.unwrap();
         assert!(c == c_again || c == -c_again);
-        c.add_assign(&F::one());
+        c.add_assign(&F::ONE);
     }
 }
 
@@ -45,19 +45,19 @@ pub fn random_field_tests<F: Field>() {
     random_inversion_tests::<F, _>(&mut rng);
     random_expansion_tests::<F, _>(&mut rng);
 
-    assert!(bool::from(F::zero().is_zero()));
+    assert!(bool::from(F::ZERO.is_zero()));
     {
-        let mut z = F::zero();
+        let mut z = F::ZERO;
         z = z.neg();
         assert!(bool::from(z.is_zero()));
     }
 
-    assert_eq!(F::zero().invert().is_none().unwrap_u8(), 1);
+    assert_eq!(F::ZERO.invert().is_none().unwrap_u8(), 1);
 
     // Multiplication by zero
     {
         let mut a = F::random(&mut rng);
-        a.mul_assign(&F::zero());
+        a.mul_assign(&F::ZERO);
         assert!(bool::from(a.is_zero()));
     }
 
@@ -65,7 +65,7 @@ pub fn random_field_tests<F: Field>() {
     {
         let mut a = F::random(&mut rng);
         let copy = a;
-        a.add_assign(&F::zero());
+        a.add_assign(&F::ZERO);
         assert_eq!(a, copy);
     }
 }
@@ -205,14 +205,14 @@ fn random_squaring_tests<F: Field, R: RngCore>(rng: &mut R) {
 }
 
 fn random_inversion_tests<F: Field, R: RngCore>(rng: &mut R) {
-    assert_eq!(F::zero().invert().is_none().unwrap_u8(), 1);
+    assert_eq!(F::ZERO.invert().is_none().unwrap_u8(), 1);
 
     for i in 0..10000 {
         let mut a = F::random(&mut *rng);
         let b = a.invert().unwrap(); // probablistically nonzero
         a.mul_assign(&b);
 
-        assert_eq!(a, F::one(), "inversion round {}", i);
+        assert_eq!(a, F::ONE, "inversion round {}", i);
     }
 }
 

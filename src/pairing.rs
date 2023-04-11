@@ -160,7 +160,7 @@ impl ConditionallySelectable for MillerLoopResult {
 
 impl Default for MillerLoopResult {
     fn default() -> Self {
-        MillerLoopResult(Fp12::one())
+        MillerLoopResult(Fp12::ONE)
     }
 }
 

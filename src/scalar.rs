@@ -315,7 +315,7 @@ where
     where
         I: Iterator<Item = T>,
     {
-        iter.fold(Scalar::zero(), |sum, x| sum + x.borrow())
+        iter.fold(Scalar::ZERO, |sum, x| sum + x.borrow())
     }
 }
 
@@ -327,7 +327,7 @@ where
     where
         I: Iterator<Item = T>,
     {
-        iter.fold(Scalar::one(), |product, x| product * x.borrow())
+        iter.fold(Scalar::ONE, |product, x| product * x.borrow())
     }
 }
 
@@ -356,13 +356,9 @@ impl Field for Scalar {
         }
     }
 
-    fn zero() -> Self {
-        ZERO
-    }
+    const ZERO: Self = ZERO;
 
-    fn one() -> Self {
-        R
-    }
+    const ONE: Self = R;
 
     fn is_zero(&self) -> Choice {
         self.ct_eq(&ZERO)
@@ -383,7 +379,7 @@ impl Field for Scalar {
     fn invert(&self) -> CtOption<Self> {
         let mut inv = blst_fr::default();
         unsafe { blst_fr_eucl_inverse(&mut inv, &self.0) };
-        let is_invertible = !self.ct_eq(&Scalar::zero());
+        let is_invertible = !self.ct_eq(&Scalar::ZERO);
         CtOption::new(Scalar(inv), is_invertible)
     }
 
@@ -413,7 +409,7 @@ impl Field for Scalar {
             let mut j_less_than_v: Choice = 1.into();
 
             for j in 2..max_v {
-                let tmp_is_one = tmp.ct_eq(&Scalar::one());
+                let tmp_is_one = tmp.ct_eq(&Scalar::ONE);
                 let squared = Scalar::conditional_select(&tmp, &z, tmp_is_one).square();
                 tmp = Scalar::conditional_select(&squared, &tmp, tmp_is_one);
                 let new_z = Scalar::conditional_select(&z, &squared, tmp_is_one);
@@ -423,7 +419,7 @@ impl Field for Scalar {
             }
 
             let result = x * z;
-            x = Scalar::conditional_select(&result, &x, b.ct_eq(&Scalar::one()));
+            x = Scalar::conditional_select(&result, &x, b.ct_eq(&Scalar::ONE));
             z = z.square();
             b *= z;
             v = k;
@@ -433,6 +429,10 @@ impl Field for Scalar {
             x,
             (x * x).ct_eq(self), // Only return Some if it's the square root.
         )
+    }
+
+    fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
+        ff::helpers::sqrt_ratio_generic(num, div)
     }
 }
 
@@ -470,6 +470,41 @@ impl PrimeField for Scalar {
     const CAPACITY: u32 = Self::NUM_BITS - 1;
     const S: u32 = S;
 
+    /// 2^-1
+    const TWO_INV: Scalar = Scalar(blst_fr {
+        l: [
+            0x0000_0000_ffff_ffff,
+            0xac42_5bfd_0001_a401,
+            0xccc6_27f7_f65e_27fa,
+            0x0c12_58ac_d662_82b7,
+        ],
+    });
+
+    /// ROOT_OF_UNITY^-1
+    const ROOT_OF_UNITY_INV: Scalar = Scalar(blst_fr {
+        l: [
+            0x4256_481a_dcf3_219a,
+            0x45f3_7b7f_96b6_cad3,
+            0xf9c3_f1d7_5f7a_3b27,
+            0x2d2f_c049_658a_fd43,
+        ],
+    });
+
+    // GENERATOR^{2^s} where t * 2^s + 1 = q with t odd.
+    /// In other words, this is a t root of unity.
+    const DELTA: Scalar = Scalar(blst_fr {
+        l: [
+            0x70e3_10d3_d146_f96a,
+            0x4b64_c089_19e2_99e6,
+            0x51e1_1418_6a8b_970d,
+            0x6185_d066_27c0_67cb,
+        ],
+    });
+
+    /// Constant representing the modulus
+    const MODULUS: &'static str =
+        "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
+
     /// Converts a little-endian non-Montgomery form `repr` into a Montgomery form `Scalar`.
     fn from_repr(repr: Self::Repr) -> CtOption<Self> {
         Self::from_bytes_le(&repr)
@@ -495,13 +530,9 @@ impl PrimeField for Scalar {
         Choice::from(self.to_repr()[0] & 1)
     }
 
-    fn multiplicative_generator() -> Self {
-        GENERATOR
-    }
+    const MULTIPLICATIVE_GENERATOR: Self = GENERATOR;
 
-    fn root_of_unity() -> Self {
-        ROOT_OF_UNITY
-    }
+    const ROOT_OF_UNITY: Self = ROOT_OF_UNITY;
 }
 
 #[cfg(not(target_pointer_width = "64"))]
@@ -618,9 +649,9 @@ impl Scalar {
         ];
         // s = self^((modulus - 1) // 2)
         let s = self.pow_vartime(MOD_MINUS_1_OVER_2);
-        if s == Self::zero() {
+        if s == Self::ZERO {
             0
-        } else if s == Self::one() {
+        } else if s == Self::ONE {
             1
         } else {
             -1
@@ -737,11 +768,11 @@ mod tests {
     #[test]
     fn test_debug() {
         assert_eq!(
-            format!("{:?}", Scalar::zero()),
+            format!("{:?}", Scalar::ZERO),
             "Scalar(0x0000000000000000000000000000000000000000000000000000000000000000)"
         );
         assert_eq!(
-            format!("{:?}", Scalar::one()),
+            format!("{:?}", Scalar::ONE),
             "Scalar(0x0000000000000000000000000000000000000000000000000000000000000001)"
         );
         assert_eq!(
@@ -752,17 +783,17 @@ mod tests {
 
     #[test]
     fn test_equality() {
-        assert_eq!(Scalar::zero(), Scalar::zero());
-        assert_eq!(Scalar::one(), Scalar::one());
+        assert_eq!(Scalar::ZERO, Scalar::ZERO);
+        assert_eq!(Scalar::ONE, Scalar::ONE);
 
-        assert_ne!(Scalar::zero(), Scalar::one());
-        assert_ne!(Scalar::one(), R2);
+        assert_ne!(Scalar::ZERO, Scalar::ONE);
+        assert_ne!(Scalar::ONE, R2);
     }
 
     #[test]
     fn test_to_bytes() {
         assert_eq!(
-            Scalar::zero().to_bytes_le(),
+            Scalar::ZERO.to_bytes_le(),
             [
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
@@ -770,7 +801,7 @@ mod tests {
         );
 
         assert_eq!(
-            Scalar::one().to_bytes_le(),
+            Scalar::ONE.to_bytes_le(),
             [
                 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
@@ -786,7 +817,7 @@ mod tests {
         );
 
         assert_eq!(
-            (-&Scalar::one()).to_bytes_le(),
+            (-&Scalar::ONE).to_bytes_le(),
             [
                 0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
@@ -802,7 +833,7 @@ mod tests {
                 0, 0, 0, 0
             ])
             .unwrap(),
-            Scalar::zero()
+            Scalar::ZERO
         );
 
         assert_eq!(
@@ -811,7 +842,7 @@ mod tests {
                 0, 0, 0, 0
             ])
             .unwrap(),
-            Scalar::one()
+            Scalar::ONE
         );
 
         assert_eq!(
@@ -861,10 +892,10 @@ mod tests {
 
     #[test]
     fn test_zero() {
-        assert_eq!(Scalar::zero(), -&Scalar::zero());
-        assert_eq!(Scalar::zero(), Scalar::zero() + Scalar::zero());
-        assert_eq!(Scalar::zero(), Scalar::zero() - Scalar::zero());
-        assert_eq!(Scalar::zero(), Scalar::zero() * Scalar::zero());
+        assert_eq!(Scalar::ZERO, -&Scalar::ZERO);
+        assert_eq!(Scalar::ZERO, Scalar::ZERO + Scalar::ZERO);
+        assert_eq!(Scalar::ZERO, Scalar::ZERO - Scalar::ZERO);
+        assert_eq!(Scalar::ZERO, Scalar::ZERO * Scalar::ZERO);
     }
 
     #[test]
@@ -887,7 +918,7 @@ mod tests {
         let mut tmp = LARGEST;
         tmp += &Scalar(blst::blst_fr { l: [1, 0, 0, 0] });
 
-        assert_eq!(tmp, Scalar::zero());
+        assert_eq!(tmp, Scalar::ZERO);
     }
 
     #[test]
@@ -896,13 +927,13 @@ mod tests {
 
         assert_eq!(tmp, Scalar(blst::blst_fr { l: [1, 0, 0, 0] }));
 
-        let tmp = -&Scalar::zero();
-        assert_eq!(tmp, Scalar::zero());
+        let tmp = -&Scalar::ZERO;
+        assert_eq!(tmp, Scalar::ZERO);
         let tmp = -&Scalar(blst::blst_fr { l: [1, 0, 0, 0] });
         assert_eq!(tmp, LARGEST);
 
         {
-            let mut a = Scalar::zero();
+            let mut a = Scalar::ZERO;
             a = -a;
 
             assert!(bool::from(a.is_zero()));
@@ -929,9 +960,9 @@ mod tests {
         let mut tmp = LARGEST;
         tmp -= &LARGEST;
 
-        assert_eq!(tmp, Scalar::zero());
+        assert_eq!(tmp, Scalar::ZERO);
 
-        let mut tmp = Scalar::zero();
+        let mut tmp = Scalar::ZERO;
         tmp -= &LARGEST;
 
         let mut tmp2 = Scalar(blst::blst_fr { l: MODULUS });
@@ -1041,7 +1072,7 @@ mod tests {
     #[test]
     fn test_sqrt() {
         {
-            assert_eq!(Scalar::zero().sqrt().unwrap(), Scalar::zero());
+            assert_eq!(Scalar::ZERO.sqrt().unwrap(), Scalar::ZERO);
         }
 
         let mut square = Scalar(blst::blst_fr {
@@ -1062,7 +1093,7 @@ mod tests {
             } else {
                 assert_eq!(square_root.unwrap() * square_root.unwrap(), square);
             }
-            square -= Scalar::one();
+            square -= Scalar::ONE;
         }
 
         assert_eq!(49, none_count);
@@ -1161,8 +1192,8 @@ mod tests {
 
     #[test]
     fn test_scalar_legendre() {
-        assert_eq!(Scalar::zero().sqrt().unwrap(), Scalar::zero());
-        assert_eq!(Scalar::one().sqrt().unwrap(), Scalar::one());
+        assert_eq!(Scalar::ZERO.sqrt().unwrap(), Scalar::ZERO);
+        assert_eq!(Scalar::ONE.sqrt().unwrap(), Scalar::ONE);
 
         let e = Scalar::from_u64s_le(&[
             0x0dbc5349cd5664da,
@@ -1539,14 +1570,14 @@ mod tests {
 
     #[test]
     fn test_scalar_inverse() {
-        assert_eq!(Scalar::zero().invert().is_none().unwrap_u8(), 1);
+        assert_eq!(Scalar::ZERO.invert().is_none().unwrap_u8(), 1);
 
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
         ]);
 
-        let one = Scalar::one();
+        let one = Scalar::ONE;
 
         for i in 0..1000 {
             // Ensure that a * a^-1 = 1
@@ -1576,7 +1607,7 @@ mod tests {
     #[test]
     fn test_scalar_negate() {
         {
-            let a = Scalar::zero();
+            let a = Scalar::ZERO;
             assert!(bool::from((-a).is_zero()));
         }
 
@@ -1605,7 +1636,7 @@ mod tests {
             // multiplication.
             let a = Scalar::random(&mut rng);
             let target = a.pow_vartime(&[i]);
-            let mut c = Scalar::one();
+            let mut c = Scalar::ONE;
             for _ in 0..i {
                 c.mul_assign(&a);
             }
@@ -1627,8 +1658,8 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        assert_eq!(Scalar::zero().sqrt().unwrap(), Scalar::zero());
-        assert_eq!(Scalar::one().sqrt().unwrap(), Scalar::one());
+        assert_eq!(Scalar::ZERO.sqrt().unwrap(), Scalar::ZERO);
+        assert_eq!(Scalar::ONE.sqrt().unwrap(), Scalar::ONE);
 
         for _ in 0..1000 {
             // Ensure sqrt(a^2) = a or -a
@@ -1745,23 +1776,21 @@ mod tests {
     #[test]
     fn test_scalar_root_of_unity() {
         assert_eq!(Scalar::S, 32);
-        assert_eq!(Scalar::multiplicative_generator(), Scalar::from(7));
+        assert_eq!(Scalar::MULTIPLICATIVE_GENERATOR, Scalar::from(7));
         assert_eq!(
-            Scalar::multiplicative_generator().pow_vartime([
+            Scalar::MULTIPLICATIVE_GENERATOR.pow_vartime([
                 0xfffe5bfeffffffff,
                 0x9a1d80553bda402,
                 0x299d7d483339d808,
                 0x73eda753
             ]),
-            Scalar::root_of_unity()
+            Scalar::ROOT_OF_UNITY
         );
         assert_eq!(
-            Scalar::root_of_unity().pow_vartime([1 << Scalar::S]),
-            Scalar::one()
+            Scalar::ROOT_OF_UNITY.pow_vartime([1 << Scalar::S]),
+            Scalar::ONE
         );
-        assert!(!bool::from(
-            Scalar::multiplicative_generator().is_quad_res()
-        ));
+        assert!(!bool::from(Scalar::MULTIPLICATIVE_GENERATOR.is_quad_res()));
     }
 
     #[test]
@@ -1807,7 +1836,7 @@ mod tests {
 
     #[test]
     fn test_scalar_to_le_bits() {
-        let mut bits = Scalar::one().to_le_bits().into_iter();
+        let mut bits = Scalar::ONE.to_le_bits().into_iter();
         assert!(bits.next().unwrap());
         for bit in bits {
             assert!(!bit);
@@ -1827,7 +1856,7 @@ mod tests {
         // `[u8; 32]`, i.e. 256-bits.
         assert!(bits.next().is_none());
 
-        let mut neg1_bits = (-Scalar::one()).to_le_bits().into_iter();
+        let mut neg1_bits = (-Scalar::ONE).to_le_bits().into_iter();
         let mut modulus_bits = Scalar::char_le_bits().into_iter();
         assert_ne!(neg1_bits.next().unwrap(), modulus_bits.next().unwrap());
         for (b1, b2) in neg1_bits.zip(modulus_bits) {
@@ -1838,21 +1867,21 @@ mod tests {
     #[test]
     fn m1_inv_bug() {
         // This fails on aarch64-darwin.
-        let bad = Scalar::zero() - Scalar::from(7);
+        let bad = Scalar::ZERO - Scalar::from(7);
 
         let inv = bad.invert().unwrap();
         let check = inv * bad;
-        assert_eq!(Scalar::one(), check);
+        assert_eq!(Scalar::ONE, check);
     }
     #[test]
     fn m1_inv_bug_more() {
         let mut bad = Vec::new();
         for i in 1..1000000 {
             // Ensure that a * a^-1 = 1
-            let a = Scalar::zero() - Scalar::from(i);
+            let a = Scalar::ZERO - Scalar::from(i);
             let ainv = a.invert().unwrap();
             let check = a * ainv;
-            let one = Scalar::one();
+            let one = Scalar::ONE;
 
             if check != one {
                 bad.push((i, a));
@@ -1886,7 +1915,7 @@ mod tests {
         for a in maybe_bad.iter() {
             let ainv = a.invert().unwrap();
             let check = a * ainv;
-            let one = Scalar::one();
+            let one = Scalar::ONE;
 
             if check != one {
                 yep_bad.push(a);

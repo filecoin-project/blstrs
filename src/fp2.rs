@@ -34,7 +34,7 @@ impl fmt::Display for Fp2 {
 
 impl From<Fp> for Fp2 {
     fn from(f: Fp) -> Fp2 {
-        Fp2::new(f, Fp::zero())
+        Fp2::new(f, Fp::ZERO)
     }
 }
 
@@ -52,13 +52,13 @@ impl From<Fp2> for blst_fp2 {
 
 impl From<u64> for Fp2 {
     fn from(val: u64) -> Fp2 {
-        Fp2::new(Fp::from(val), Fp::zero())
+        Fp2::new(Fp::from(val), Fp::ZERO)
     }
 }
 
 impl Default for Fp2 {
     fn default() -> Self {
-        Fp2::zero()
+        Fp2::ZERO
     }
 }
 
@@ -184,6 +184,8 @@ impl_add_sub!(Fp2);
 impl_add_sub_assign!(Fp2);
 impl_mul!(Fp2);
 impl_mul_assign!(Fp2);
+impl_sum!(Fp2);
+impl_product!(Fp2);
 
 impl Fp2 {
     /// Constructs an element of `Fp2`.
@@ -251,15 +253,15 @@ impl Field for Fp2 {
         Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
     }
 
-    fn zero() -> Self {
-        Fp2(blst_fp2::default())
-    }
+    const ZERO: Self = Fp2(blst_fp2 {
+        fp: [blst_fp {
+            l: [0, 0, 0, 0, 0, 0],
+        }; 2usize],
+    });
 
-    fn one() -> Self {
-        Fp2(blst_fp2 {
-            fp: [Fp::one().0, Fp::zero().0],
-        })
-    }
+    const ONE: Self = Fp2(blst_fp2 {
+        fp: [Fp::ONE.0, Fp::ZERO.0],
+    });
 
     fn is_zero(&self) -> Choice {
         self.c0().is_zero() & self.c1().is_zero()
@@ -288,6 +290,11 @@ impl Field for Fp2 {
         let mut out = Self::default();
         let is_quad_res = unsafe { blst_fp2_sqrt(&mut out.0, &self.0) };
         CtOption::new(out, Choice::from(is_quad_res as u8))
+    }
+
+    fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
+        // ff::helpers::sqrt_ratio_generic(num, div)
+        unimplemented!()
     }
 }
 
@@ -328,42 +335,42 @@ mod tests {
 
     #[test]
     fn test_fp2_ordering() {
-        let mut a = Fp2::new(Fp::zero(), Fp::zero());
+        let mut a = Fp2::new(Fp::ZERO, Fp::ZERO);
         let mut b = a;
 
         assert!(a.cmp(&b) == Ordering::Equal);
-        b.0.fp[0] = (b.c0() + Fp::one()).0;
+        b.0.fp[0] = (b.c0() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[0] = (a.c0() + Fp::one()).0;
+        a.0.fp[0] = (a.c0() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Equal);
-        b.0.fp[1] = (b.c1() + Fp::one()).0;
+        b.0.fp[1] = (b.c1() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[0] = (a.c0() + Fp::one()).0;
+        a.0.fp[0] = (a.c0() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Less);
-        a.0.fp[1] = (a.c1() + Fp::one()).0;
+        a.0.fp[1] = (a.c1() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Greater);
-        b.0.fp[0] = (b.c0() + Fp::one()).0;
+        b.0.fp[0] = (b.c0() + Fp::ONE).0;
         assert!(a.cmp(&b) == Ordering::Equal);
     }
 
     #[test]
     fn test_fp2_basics() {
-        assert_eq!(Fp2::new(Fp::zero(), Fp::zero()), Fp2::zero());
-        assert_eq!(Fp2::new(Fp::one(), Fp::zero()), Fp2::one());
-        assert!(bool::from(Fp2::zero().is_zero()));
-        assert!(!bool::from(Fp2::one().is_zero()));
-        assert!(!bool::from(Fp2::new(Fp::zero(), Fp::one(),).is_zero()));
+        assert_eq!(Fp2::new(Fp::ZERO, Fp::ZERO), Fp2::ZERO);
+        assert_eq!(Fp2::new(Fp::ONE, Fp::ZERO), Fp2::ONE);
+        assert!(bool::from(Fp2::ZERO.is_zero()));
+        assert!(!bool::from(Fp2::ONE.is_zero()));
+        assert!(!bool::from(Fp2::new(Fp::ZERO, Fp::ONE,).is_zero()));
     }
 
     #[test]
     fn test_fp2_squaring() {
-        let a = Fp2::new(Fp::one(), Fp::one()); // u + 1
+        let a = Fp2::new(Fp::ONE, Fp::ONE); // u + 1
         let a_sq = a.square();
-        assert_eq!(a_sq, Fp2::new(Fp::zero(), Fp::from(2))); // 2u
+        assert_eq!(a_sq, Fp2::new(Fp::ZERO, Fp::from(2))); // 2u
 
-        let a = Fp2::new(Fp::zero(), Fp::one()); // u
+        let a = Fp2::new(Fp::ZERO, Fp::ONE); // u
         let a_sq = a.square();
-        assert_eq!(a_sq, Fp2::new(-Fp::one(), Fp::zero())); // -1
+        assert_eq!(a_sq, Fp2::new(-Fp::ONE, Fp::ZERO)); // -1
 
         let a = Fp2::new(
             Fp::from_u64s_le(&[
@@ -480,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_fp2_inverse() {
-        assert_eq!(Fp2::zero().invert().is_none().unwrap_u8(), 1);
+        assert_eq!(Fp2::ZERO.invert().is_none().unwrap_u8(), 1);
 
         let a = Fp2::new(
             Fp::from_u64s_le(&[
@@ -911,7 +918,7 @@ mod tests {
                 0x9fb4_e61d_1e83_eac5,
                 0x005c_b922_afe8_4dc7,
             ]),
-            Fp::zero(),
+            Fp::ZERO,
         );
 
         assert_eq!(b.sqrt().unwrap().square(), b);
@@ -927,7 +934,7 @@ mod tests {
                 0xd36c_d6db_5547_e905,
                 0x02f8_c8ec_bf18_67bb,
             ]),
-            Fp::zero(),
+            Fp::ZERO,
         );
 
         assert_eq!(c.sqrt().unwrap().square(), c);
@@ -1017,12 +1024,12 @@ mod tests {
                     0x1a0111ea397fe69a
                 ])
                 .unwrap(),
-                Fp::zero(),
+                Fp::ZERO,
             )
             .sqrt()
             .unwrap(),
             Fp2::new(
-                Fp::zero(),
+                Fp::ZERO,
                 Fp::from_u64s_le(&[
                     0xb9fefffffd4357a3,
                     0x1eabfffeb153ffff,
@@ -1038,9 +1045,9 @@ mod tests {
 
     #[test]
     fn test_fp2_legendre() {
-        assert_eq!(Fp2::zero().sqrt().unwrap(), Fp2::zero());
+        assert_eq!(Fp2::ZERO.sqrt().unwrap(), Fp2::ZERO);
         // i^2 = -1
-        let mut a = -Fp2::one();
+        let mut a = -Fp2::ONE;
         assert!(a.is_quad_res());
         a.mul_by_nonresidue();
         assert!(!a.is_quad_res());
@@ -1053,7 +1060,7 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        let nqr = Fp2::new(Fp::one(), Fp::one());
+        let nqr = Fp2::new(Fp::ONE, Fp::ONE);
 
         for _ in 0..1000 {
             let mut a = Fp2::random(&mut rng);

@@ -74,7 +74,7 @@ impl MultiMillerLoop for Bls12 {
             let mut tmp = blst::blst_fp12::default();
             if (p.is_identity() | q.is_identity()).into() {
                 // Define pairing with zero as one, matching what `pairing` does.
-                tmp = crate::fp12::Fp12::one().0;
+                tmp = crate::fp12::Fp12::ONE.0;
             } else {
                 unsafe {
                     blst::blst_miller_loop_lines(&mut tmp, q.lines.as_ptr(), &p.0);
