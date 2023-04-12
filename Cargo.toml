@@ -9,6 +9,7 @@ repository = "https://github.com/filecoin-project/blstrs"
 documentation = "https://docs.rs/blstrs"
 categories = ["cryptography", "algorithms"]
 readme = "README.md"
+rust-version = "1.56.1"
 
 [package.metadata.docs.rs]
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
