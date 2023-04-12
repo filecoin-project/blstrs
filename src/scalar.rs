@@ -384,50 +384,15 @@ impl Field for Scalar {
     }
 
     fn sqrt(&self) -> CtOption<Self> {
-        // Tonelli-Shank's algorithm for q mod 16 = 1
-        // https://eprint.iacr.org/2012/685.pdf (page 12, algorithm 5)
-
-        // w = self^((t - 1) // 2)
-        //   = self^6104339283789297388802252303364915521546564123189034618274734669823
-        let w = self.pow_vartime([
-            0x7fff_2dff_7fff_ffff,
-            0x04d0_ec02_a9de_d201,
-            0x94ce_bea4_199c_ec04,
-            0x0000_0000_39f6_d3a9,
-        ]);
-
-        let mut v = S;
-        let mut x = self * w;
-        let mut b = x * w;
-
-        // Initialize z as the 2^S root of unity.
-        let mut z = ROOT_OF_UNITY;
-
-        for max_v in (1..=S).rev() {
-            let mut k = 1;
-            let mut tmp = b.square();
-            let mut j_less_than_v: Choice = 1.into();
-
-            for j in 2..max_v {
-                let tmp_is_one = tmp.ct_eq(&Scalar::ONE);
-                let squared = Scalar::conditional_select(&tmp, &z, tmp_is_one).square();
-                tmp = Scalar::conditional_select(&squared, &tmp, tmp_is_one);
-                let new_z = Scalar::conditional_select(&z, &squared, tmp_is_one);
-                j_less_than_v &= !j.ct_eq(&v);
-                k = u32::conditional_select(&j, &k, tmp_is_one);
-                z = Scalar::conditional_select(&z, &new_z, j_less_than_v);
-            }
-
-            let result = x * z;
-            x = Scalar::conditional_select(&result, &x, b.ct_eq(&Scalar::ONE));
-            z = z.square();
-            b *= z;
-            v = k;
-        }
-
-        CtOption::new(
-            x,
-            (x * x).ct_eq(self), // Only return Some if it's the square root.
+        // (t - 1) // 2 = 6104339283789297388802252303364915521546564123189034618274734669823
+        ff::helpers::sqrt_tonelli_shanks(
+            self,
+            &[
+                0x7fff_2dff_7fff_ffff,
+                0x04d0_ec02_a9de_d201,
+                0x94ce_bea4_199c_ec04,
+                0x0000_0000_39f6_d3a9,
+            ],
         )
     }
 

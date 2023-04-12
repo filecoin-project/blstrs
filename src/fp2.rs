@@ -254,9 +254,7 @@ impl Field for Fp2 {
     }
 
     const ZERO: Self = Fp2(blst_fp2 {
-        fp: [blst_fp {
-            l: [0, 0, 0, 0, 0, 0],
-        }; 2usize],
+        fp: [Fp::ZERO.0, Fp::ZERO.0],
     });
 
     const ONE: Self = Fp2(blst_fp2 {

@@ -233,13 +233,13 @@ macro_rules! impl_sum {
 
         impl<'a> std::iter::Sum<&'a $rhs> for $lhs {
             fn sum<I: Iterator<Item = &'a $rhs>>(iter: I) -> $rhs {
-                iter.cloned().sum()
+                iter.sum()
             }
         }
     };
 }
 
-// Requires the caller to manually implement `AMulAssign<rhs> for lhs`, same for reference-based.
+// Requires the caller to manually implement `MulAssign<rhs> for lhs`, same for reference-based.
 macro_rules! impl_product {
     ($t:ident) => {
         impl_product!($t, $t);
@@ -257,7 +257,7 @@ macro_rules! impl_product {
 
         impl<'a> std::iter::Product<&'a $rhs> for $lhs {
             fn product<I: Iterator<Item = &'a $rhs>>(iter: I) -> $rhs {
-                iter.cloned().product()
+                iter.product()
             }
         }
     };
