@@ -175,7 +175,7 @@ impl Group for Gt {
 
     /// Returns the group identity, which is $1$.
     fn identity() -> Self {
-        Gt(Fp12::one())
+        Gt(Fp12::ONE)
     }
 
     fn generator() -> Self {

@@ -45,13 +45,13 @@ impl fmt::Display for Fp6 {
 
 impl From<Fp> for Fp6 {
     fn from(f: Fp) -> Fp6 {
-        Fp6::new(Fp2::from(f), Fp2::zero(), Fp2::zero())
+        Fp6::new(Fp2::from(f), Fp2::ZERO, Fp2::ZERO)
     }
 }
 
 impl From<Fp2> for Fp6 {
     fn from(f: Fp2) -> Fp6 {
-        Fp6::new(f, Fp2::zero(), Fp2::zero())
+        Fp6::new(f, Fp2::ZERO, Fp2::ZERO)
     }
 }
 
@@ -75,7 +75,7 @@ impl From<u64> for Fp6 {
 
 impl Default for Fp6 {
     fn default() -> Self {
-        Fp6::zero()
+        Fp6::ZERO
     }
 }
 
@@ -249,6 +249,8 @@ impl_add_sub!(Fp6);
 impl_add_sub_assign!(Fp6);
 impl_mul!(Fp6);
 impl_mul_assign!(Fp6);
+impl_sum!(Fp6);
+impl_product!(Fp6);
 
 impl Field for Fp6 {
     fn random(mut rng: impl RngCore) -> Self {
@@ -259,13 +261,9 @@ impl Field for Fp6 {
         )
     }
 
-    fn zero() -> Self {
-        Fp6::new(Fp2::zero(), Fp2::zero(), Fp2::zero())
-    }
+    const ZERO: Self = Fp6::new(Fp2::ZERO, Fp2::ZERO, Fp2::ZERO);
 
-    fn one() -> Self {
-        Fp6::new(Fp2::one(), Fp2::zero(), Fp2::zero())
-    }
+    const ONE: Self = Fp6::new(Fp2::ONE, Fp2::ZERO, Fp2::ZERO);
 
     fn is_zero(&self) -> Choice {
         self.c0().is_zero() & self.c1().is_zero() & self.c2().is_zero()
@@ -352,6 +350,11 @@ impl Field for Fp6 {
     fn sqrt(&self) -> CtOption<Self> {
         unimplemented!()
     }
+
+    fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
+        // ff::helpers::sqrt_ratio_generic(num, div)
+        unimplemented!()
+    }
 }
 
 impl Fp6 {
@@ -422,7 +425,7 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        let nqr = Fp6::new(Fp2::zero(), Fp2::one(), Fp2::zero());
+        let nqr = Fp6::new(Fp2::ZERO, Fp2::ONE, Fp2::ZERO);
 
         for _ in 0..1000 {
             let mut a = Fp6::random(&mut rng);

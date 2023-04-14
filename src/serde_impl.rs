@@ -358,7 +358,7 @@ mod tests {
             test_roundtrip(&f);
         }
 
-        let f = Scalar::zero();
+        let f = Scalar::ZERO;
         test_roundtrip(&f);
         // The hex string "5b302c302c302c305d" encodes the unicode string "[0,0,0,0]" where each
         // byte in the hex string encodes a unicode character: 0x58 = "[", 0x30 = "0", 0x2c = ",",
@@ -368,7 +368,7 @@ mod tests {
             f
         );
 
-        let f = Scalar::one();
+        let f = Scalar::ONE;
         test_roundtrip(&f);
         assert_eq!(
             serde_json::from_slice::<Scalar>(&hex::decode("5b312c302c302c305d").unwrap()).unwrap(),
@@ -388,7 +388,7 @@ mod tests {
             test_roundtrip(&f);
         }
 
-        let f = Fp::zero();
+        let f = Fp::ZERO;
         test_roundtrip(&f);
         assert_eq!(
             serde_json::from_slice::<Fp>(&hex::decode("5b302c302c302c302c302c305d").unwrap())
@@ -396,7 +396,7 @@ mod tests {
             f
         );
 
-        let f = Fp::one();
+        let f = Fp::ONE;
         test_roundtrip(&f);
         assert_eq!(
             serde_json::from_slice::<Fp>(&hex::decode("5b312c302c302c302c302c305d").unwrap())
@@ -416,14 +416,14 @@ mod tests {
             test_roundtrip(&f);
         }
 
-        let f = Fp12::zero();
+        let f = Fp12::ZERO;
         test_roundtrip(&f);
         assert_eq!(
             serde_json::from_slice::<Fp12>(&hex::decode("7b226330223a7b226330223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d2c226331223a7b226330223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d7d").unwrap()).unwrap(),
             f
         );
 
-        let f = Fp12::one();
+        let f = Fp12::ONE;
         test_roundtrip(&f);
         assert_eq!(
             serde_json::from_slice::<Fp12>(&hex::decode("7b226330223a7b226330223a7b226330223a5b312c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d2c226331223a7b226330223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d7d").unwrap()).unwrap(),

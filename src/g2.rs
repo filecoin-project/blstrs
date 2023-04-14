@@ -1080,7 +1080,7 @@ mod tests {
                 ])
                 .unwrap(),
             ),
-            Fp2::one(),
+            Fp2::ONE,
         );
 
         p.add_assign(&G2Projective::from_raw_unchecked(
@@ -1124,7 +1124,7 @@ mod tests {
                 ])
                 .unwrap(),
             ),
-            Fp2::one(),
+            Fp2::ONE,
         ));
 
         let p = G2Affine::from(p);
@@ -1220,7 +1220,7 @@ mod tests {
                 ])
                 .unwrap(),
             ),
-            Fp2::one(),
+            Fp2::ONE,
         );
 
         p = p.double();

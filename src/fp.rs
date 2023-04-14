@@ -351,7 +351,7 @@ impl From<blst_fp> for Fp {
 
 impl Default for Fp {
     fn default() -> Self {
-        Fp::zero()
+        Fp::ZERO
     }
 }
 
@@ -469,6 +469,8 @@ impl_add_sub!(Fp);
 impl_add_sub_assign!(Fp);
 impl_mul!(Fp);
 impl_mul_assign!(Fp);
+impl_sum!(Fp);
+impl_product!(Fp);
 
 // Returns `true` if  `le_bytes` is less than the modulus (both are in non-Montgomery form).
 #[allow(clippy::comparison_chain)]
@@ -519,14 +521,10 @@ impl Field for Fp {
         }
     }
 
-    fn zero() -> Self {
-        ZERO
-    }
+    const ZERO: Self = ZERO;
 
     // Returns `1 mod p` in Montgomery form `1 * R mod p`;
-    fn one() -> Self {
-        R
-    }
+    const ONE: Self = R;
 
     fn is_zero(&self) -> Choice {
         self.ct_eq(&ZERO)
@@ -547,7 +545,7 @@ impl Field for Fp {
     fn invert(&self) -> CtOption<Self> {
         let mut inv = Self::default();
         unsafe { blst_fp_eucl_inverse(&mut inv.0, &self.0) };
-        let is_invertible = !self.ct_eq(&Fp::zero());
+        let is_invertible = !self.ct_eq(&Fp::ZERO);
         CtOption::new(inv, is_invertible)
     }
 
@@ -555,6 +553,11 @@ impl Field for Fp {
         let mut out = Self::default();
         let is_quad_res = unsafe { blst_fp_sqrt(&mut out.0, &self.0) };
         CtOption::new(out, Choice::from(is_quad_res as u8))
+    }
+
+    fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
+        // ff::helpers::sqrt_ratio_generic(num, div)
+        unimplemented!()
     }
 }
 
@@ -689,7 +692,7 @@ mod tests {
     #[test]
     fn test_fp_neg_one() {
         assert_eq!(
-            -Fp::one(),
+            -Fp::ONE,
             Fp(blst::blst_fp {
                 l: [
                     0x43f5fffffffcaaae,
@@ -1125,14 +1128,14 @@ mod tests {
 
     #[test]
     fn test_fp_inverse() {
-        assert_eq!(Fp::zero().invert().is_none().unwrap_u8(), 1);
+        assert_eq!(Fp::ZERO.invert().is_none().unwrap_u8(), 1);
 
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
         ]);
 
-        let one = Fp::one();
+        let one = Fp::ONE;
 
         for _ in 0..1000 {
             // Ensure that a * a^-1 = 1
@@ -1160,7 +1163,7 @@ mod tests {
     #[test]
     fn test_fp_negate() {
         {
-            let a = Fp::zero();
+            let a = Fp::ZERO;
             assert!(bool::from((-a).is_zero()));
         }
 
@@ -1190,8 +1193,8 @@ mod tests {
             // Exponentiate by various small numbers and ensure it consists with repeated
             // multiplication.
             let a = Fp::random(&mut rng);
-            let target = a.pow_vartime(&[i]);
-            let mut c = Fp::one();
+            let target = a.pow_vartime([i]);
+            let mut c = Fp::ONE;
             for _ in 0..i {
                 c.mul_assign(&a);
             }
@@ -1213,8 +1216,8 @@ mod tests {
             0xbc, 0xe5,
         ]);
 
-        assert_eq!(Fp::zero().sqrt().unwrap(), Fp::zero());
-        assert_eq!(Fp::one().sqrt().unwrap(), Fp::one());
+        assert_eq!(Fp::ZERO.sqrt().unwrap(), Fp::ZERO);
+        assert_eq!(Fp::ONE.sqrt().unwrap(), Fp::ONE);
 
         for _ in 0..1000 {
             // Ensure sqrt(a^2) = a or -a
@@ -1401,6 +1404,6 @@ mod tests {
         ]);
 
         assert_eq!(a.invert().unwrap(), b);
-        assert!(bool::from(Fp::zero().invert().is_none()));
+        assert!(bool::from(Fp::ZERO.invert().is_none()));
     }
 }

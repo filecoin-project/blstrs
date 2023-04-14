@@ -35,19 +35,19 @@ impl fmt::Display for Fp12 {
 
 impl From<Fp> for Fp12 {
     fn from(f: Fp) -> Fp12 {
-        Fp12::new(Fp6::from(f), Fp6::zero())
+        Fp12::new(Fp6::from(f), Fp6::ZERO)
     }
 }
 
 impl From<Fp2> for Fp12 {
     fn from(f: Fp2) -> Fp12 {
-        Fp12::new(Fp6::from(f), Fp6::zero())
+        Fp12::new(Fp6::from(f), Fp6::ZERO)
     }
 }
 
 impl From<Fp6> for Fp12 {
     fn from(f: Fp6) -> Fp12 {
-        Fp12::new(f, Fp6::zero())
+        Fp12::new(f, Fp6::ZERO)
     }
 }
 
@@ -82,7 +82,7 @@ impl ConditionallySelectable for Fp12 {
 
 impl Default for Fp12 {
     fn default() -> Self {
-        Fp12::zero()
+        Fp12::ZERO
     }
 }
 
@@ -207,19 +207,17 @@ impl_add_sub!(Fp12);
 impl_add_sub_assign!(Fp12);
 impl_mul!(Fp12);
 impl_mul_assign!(Fp12);
+impl_sum!(Fp12);
+impl_product!(Fp12);
 
 impl Field for Fp12 {
     fn random(mut rng: impl RngCore) -> Self {
         Fp12::new(Fp6::random(&mut rng), Fp6::random(&mut rng))
     }
 
-    fn zero() -> Self {
-        Fp12::new(Fp6::zero(), Fp6::zero())
-    }
+    const ZERO: Self = Fp12::new(Fp6::ZERO, Fp6::ZERO);
 
-    fn one() -> Self {
-        Fp12::new(Fp6::one(), Fp6::zero())
-    }
+    const ONE: Self = Fp12::new(Fp6::ONE, Fp6::ZERO);
 
     fn is_zero(&self) -> Choice {
         self.c0().is_zero() & self.c1().is_zero()
@@ -238,13 +236,18 @@ impl Field for Fp12 {
     }
 
     fn invert(&self) -> CtOption<Self> {
-        let is_zero = self.ct_eq(&Self::zero());
+        let is_zero = self.ct_eq(&Self::ZERO);
         let mut inv = *self;
         unsafe { blst_fp12_inverse(&mut inv.0, &self.0) }
         CtOption::new(inv, !is_zero)
     }
 
     fn sqrt(&self) -> CtOption<Self> {
+        unimplemented!()
+    }
+
+    fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
+        // ff::helpers::sqrt_ratio_generic(num, div)
         unimplemented!()
     }
 }
@@ -581,9 +584,9 @@ mod tests {
 
     #[test]
     fn test_fp12_eq() {
-        assert_eq!(Fp12::one(), Fp12::one());
-        assert_eq!(Fp12::zero(), Fp12::zero());
-        assert_ne!(Fp12::zero(), Fp12::one());
+        assert_eq!(Fp12::ONE, Fp12::ONE);
+        assert_eq!(Fp12::ZERO, Fp12::ZERO);
+        assert_ne!(Fp12::ZERO, Fp12::ONE);
     }
 
     #[test]

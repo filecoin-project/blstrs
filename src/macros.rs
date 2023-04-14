@@ -214,3 +214,51 @@ macro_rules! impl_add {
         }
     };
 }
+
+// Requires the caller to manually implement `AddAssign<rhs> for lhs`, same for reference-based.
+macro_rules! impl_sum {
+    ($t:ident) => {
+        impl_sum!($t, $t);
+    };
+    ($lhs:ident, $rhs:ident) => {
+        impl std::iter::Sum<$rhs> for $lhs {
+            fn sum<I: Iterator<Item = $rhs>>(iter: I) -> $rhs {
+                let mut res = $rhs::ZERO;
+                for item in iter {
+                    res += item;
+                }
+                res
+            }
+        }
+
+        impl<'a> std::iter::Sum<&'a $rhs> for $lhs {
+            fn sum<I: Iterator<Item = &'a $rhs>>(iter: I) -> $rhs {
+                iter.sum()
+            }
+        }
+    };
+}
+
+// Requires the caller to manually implement `MulAssign<rhs> for lhs`, same for reference-based.
+macro_rules! impl_product {
+    ($t:ident) => {
+        impl_product!($t, $t);
+    };
+    ($lhs:ident, $rhs:ident) => {
+        impl std::iter::Product<$rhs> for $lhs {
+            fn product<I: Iterator<Item = $rhs>>(iter: I) -> $rhs {
+                let mut res = $rhs::ONE;
+                for item in iter {
+                    res *= item;
+                }
+                res
+            }
+        }
+
+        impl<'a> std::iter::Product<&'a $rhs> for $lhs {
+            fn product<I: Iterator<Item = &'a $rhs>>(iter: I) -> $rhs {
+                iter.product()
+            }
+        }
+    };
+}

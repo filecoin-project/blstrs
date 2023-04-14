@@ -1174,7 +1174,7 @@ mod tests {
                         0xbc3b8d5fb0447f7,
                         0x7bfa4c7210f4f44
                     ]),
-                    Fp::one(),
+                    Fp::ONE,
                 ))
             );
             assert_eq!(c.is_identity().unwrap_u8(), 0);
@@ -1286,7 +1286,7 @@ mod tests {
                         0xbc3b8d5fb0447f7,
                         0x7bfa4c7210f4f44
                     ]),
-                    Fp::one()
+                    Fp::ONE
                 ))
             );
             assert_eq!(c.is_identity().unwrap_u8(), 0);
