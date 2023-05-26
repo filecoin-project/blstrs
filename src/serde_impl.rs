@@ -10,8 +10,8 @@ use serde::{
 };
 
 use crate::{
-    fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, G1Affine, G1Projective, G2Affine, G2Projective, Gt,
-    MillerLoopResult, Scalar,
+    fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, util, G1Affine, G1Projective, G2Affine, G2Projective,
+    Gt, MillerLoopResult, Scalar,
 };
 
 const ERR_CODE: &str = "deserialized bytes don't encode a group element";
@@ -65,14 +65,21 @@ impl<'de> Deserialize<'de> for G2Affine {
 }
 
 /// Serialize a group element using its compressed representation.
-fn serialize_affine<S: Serializer, C: PrimeCurveAffine>(c: &C, s: S) -> Result<S::Ok, S::Error> {
-    let compressed_bytes = c.to_bytes();
-    let len = compressed_bytes.as_ref().len();
-    let mut tup = s.serialize_tuple(len)?;
-    for byte in compressed_bytes.as_ref() {
-        tup.serialize_element(byte)?;
+fn serialize_affine<S: Serializer, C: PrimeCurveAffine + fmt::LowerHex>(
+    c: &C,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    if s.is_human_readable() {
+        s.serialize_str(&format!("{:x}", c))
+    } else {
+        let compressed_bytes = c.to_bytes();
+        let len = compressed_bytes.as_ref().len();
+        let mut tup = s.serialize_tuple(len)?;
+        for byte in compressed_bytes.as_ref() {
+            tup.serialize_element(byte)?;
+        }
+        tup.end()
     }
-    tup.end()
 }
 
 /// Deserializes the compressed representation of a group element.
@@ -105,30 +112,57 @@ fn deserialize_affine<'de, D: Deserializer<'de>, C: PrimeCurveAffine>(d: D) -> R
         }
     }
 
-    let len = C::Repr::default().as_ref().len();
-    d.deserialize_tuple(len, TupleVisitor { _ph: PhantomData })
+    if d.is_human_readable() {
+        let hex_str = <&str>::deserialize(d)?;
+        let mut compressed = C::Repr::default();
+        let writer = compressed.as_mut();
+        if hex_str.len() / 2 != writer.len() {
+            return Err(DeserializeError::custom(format!(
+                "invalid length, expected {}, received {}",
+                writer.len(),
+                hex_str.len() / 2
+            )));
+        }
+        util::decode_hex_into_slice(writer, hex_str.as_bytes());
+        let opt = C::from_bytes(&compressed);
+        if opt.is_some().into() {
+            Ok(opt.unwrap())
+        } else {
+            Err(DeserializeError::custom(ERR_CODE))
+        }
+    } else {
+        let len = C::Repr::default().as_ref().len();
+        d.deserialize_tuple(len, TupleVisitor { _ph: PhantomData })
+    }
 }
 
 impl Serialize for Scalar {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        let bytes = self.to_bytes_le();
-        let u64s = [
-            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
-            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap()),
-            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[16..24]).unwrap()),
-            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap()),
-        ];
-        u64s.serialize(s)
+        if s.is_human_readable() {
+            s.serialize_str(&format!("{:x}", self))
+        } else {
+            let bytes = self.to_bytes_be();
+            let mut tup = s.serialize_tuple(bytes.len())?;
+            for byte in bytes.as_ref() {
+                tup.serialize_element(byte)?;
+            }
+            tup.end()
+        }
     }
 }
 
 impl<'de> Deserialize<'de> for Scalar {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let deser = <[u64; 4]>::deserialize(d)?;
-        match Scalar::from_u64s_le(&deser).into() {
-            Some(scalar) => Ok(scalar),
-            None => Err(D::Error::custom(ERR_CODE)),
-        }
+        let buf = if d.is_human_readable() {
+            let hex_str = <&str>::deserialize(d)?;
+            let mut bytes = [0u8; 32];
+            util::decode_hex_into_slice(&mut bytes, hex_str.as_bytes());
+            bytes
+        } else {
+            <[u8; 32]>::deserialize(d)?
+        };
+        Option::<Scalar>::from(Scalar::from_bytes_be(&buf))
+            .ok_or_else(|| D::Error::custom(ERR_CODE))
     }
 }
 
@@ -269,6 +303,8 @@ mod tests {
         // dbg!(t);
         let ser = serde_json::to_vec(t).unwrap();
         assert_eq!(*t, serde_json::from_slice(&ser).unwrap());
+        let ser = serde_bare::to_vec(t).unwrap();
+        assert_eq!(*t, serde_bare::from_slice(&ser).unwrap());
     }
 
     #[test]
@@ -287,24 +323,24 @@ mod tests {
         let g = G1Projective::identity();
         test_roundtrip(&g);
         assert_eq!(
-            serde_json::from_slice::<G1Projective>(&hex::decode("5b3139322c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<G1Projective>(&"\"C00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"").unwrap(),
             g
         );
         test_roundtrip(&g.to_affine());
         assert_eq!(
-            serde_json::from_slice::<G1Affine>(&hex::decode("5b3139322c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<G1Affine>(&"\"C00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"").unwrap(),
             g.to_affine(),
         );
 
-        let g = G1Projective::generator();
+        let g = G1Projective::GENERATOR;
         test_roundtrip(&g);
         assert_eq!(
-            serde_json::from_slice::<G1Projective>(&hex::decode("5b3135312c3234312c3231312c3136372c34392c3135312c3231352c3134382c33382c3134392c39392c3134302c37392c3136392c3137322c31352c3139352c3130342c3134302c37392c3135312c3131362c3138352c352c3136312c37382c35382c36332c32332c32372c3137322c38382c3130382c38352c3233322c36332c3234392c3132322c32362c3233392c3235312c35382c3234302c31302c3231392c33342c3139382c3138375d").unwrap()).unwrap(),
+            serde_json::from_str::<G1Projective>(&"\"97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb\"").unwrap(),
             g
         );
         test_roundtrip(&g.to_affine());
         assert_eq!(
-            serde_json::from_slice::<G1Affine>(&hex::decode("5b3135312c3234312c3231312c3136372c34392c3135312c3231352c3134382c33382c3134392c39392c3134302c37392c3136392c3137322c31352c3139352c3130342c3134302c37392c3135312c3131362c3138352c352c3136312c37382c35382c36332c32332c32372c3137322c38382c3130382c38352c3233322c36332c3234392c3132322c32362c3233392c3235312c35382c3234302c31302c3231392c33342c3139382c3138375d").unwrap()).unwrap(),
+            serde_json::from_str::<G1Affine>(&"\"97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb\"").unwrap(),
             g.to_affine(),
         );
     }
@@ -325,24 +361,24 @@ mod tests {
         let g = G2Projective::identity();
         test_roundtrip(&g);
         assert_eq!(
-            serde_json::from_slice::<G2Projective>(&hex::decode("5b3139322c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<G2Projective>(&"\"c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"").unwrap(),
             g
         );
         test_roundtrip(&g.to_affine());
         assert_eq!(
-            serde_json::from_slice::<G2Affine>(&hex::decode("5b3139322c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<G2Affine>(&"\"c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"").unwrap(),
             g.to_affine(),
         );
 
-        let g = G2Projective::generator();
+        let g = G2Projective::GENERATOR;
         test_roundtrip(&g);
         assert_eq!(
-            serde_json::from_slice::<G2Projective>(&hex::decode("5b3134372c3232342c34332c39362c38322c3131332c3135392c39362c3132352c3137322c3231312c3136302c3133362c33392c37392c3130312c38392c3130372c3230382c3230382c3135332c33322c3138322c32362c3138312c3231382c39372c3138372c3232302c3132372c38302c37332c35312c37362c3234312c31382c31392c3134382c39332c38372c3232392c3137322c3132352c352c39332c342c34332c3132362c322c37342c3136322c3137382c3234302c3134332c31302c3134352c33382c382c352c33392c34352c3139372c31362c38312c3139382c3232382c3132322c3231322c3235302c36342c35392c322c3138302c38312c31312c3130302c3132322c3232372c3230392c3131392c31312c3137322c332c33382c3136382c352c3138372c3233392c3231322c3132382c38362c3230302c3139332c33332c3138392c3138345d").unwrap()).unwrap(),
+            serde_json::from_str::<G2Projective>(&"\"93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8\"").unwrap(),
             g
         );
         test_roundtrip(&g.to_affine());
         assert_eq!(
-            serde_json::from_slice::<G2Affine>(&hex::decode("5b3134372c3232342c34332c39362c38322c3131332c3135392c39362c3132352c3137322c3231312c3136302c3133362c33392c37392c3130312c38392c3130372c3230382c3230382c3135332c33322c3138322c32362c3138312c3231382c39372c3138372c3232302c3132372c38302c37332c35312c37362c3234312c31382c31392c3134382c39332c38372c3232392c3137322c3132352c352c39332c342c34332c3132362c322c37342c3136322c3137382c3234302c3134332c31302c3134352c33382c382c352c33392c34352c3139372c31362c38312c3139382c3232382c3132322c3231322c3235302c36342c35392c322c3138302c38312c31312c3130302c3132322c3232372c3230392c3131392c31312c3137322c332c33382c3136382c352c3138372c3233392c3231322c3132382c38362c3230302c3139332c33332c3138392c3138345d").unwrap()).unwrap(),
+            serde_json::from_str::<G2Affine>(&"\"93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8\"").unwrap(),
             g.to_affine()
         );
     }
@@ -364,14 +400,20 @@ mod tests {
         // byte in the hex string encodes a unicode character: 0x58 = "[", 0x30 = "0", 0x2c = ",",
         // and 0x5d = "]".
         assert_eq!(
-            serde_json::from_slice::<Scalar>(&hex::decode("5b302c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<Scalar>(
+                "\"0000000000000000000000000000000000000000000000000000000000000000\""
+            )
+            .unwrap(),
             f
         );
 
         let f = Scalar::ONE;
         test_roundtrip(&f);
         assert_eq!(
-            serde_json::from_slice::<Scalar>(&hex::decode("5b312c302c302c305d").unwrap()).unwrap(),
+            serde_json::from_str::<Scalar>(
+                "\"0000000000000000000000000000000000000000000000000000000000000001\""
+            )
+            .unwrap(),
             f
         );
     }
@@ -428,6 +470,39 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<Fp12>(&hex::decode("7b226330223a7b226330223a7b226330223a5b312c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d2c226331223a7b226330223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226331223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d2c226332223a7b226330223a5b302c302c302c302c302c305d2c226331223a5b302c302c302c302c302c305d7d7d7d").unwrap()).unwrap(),
             f
+        );
+    }
+
+    #[test]
+    fn serde_compatible_bls12_381() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        let s1 = Scalar::random(&mut rng);
+        let bytes = s1.to_bytes_be();
+        let s2 = bls12_381_plus::Scalar::from_be_bytes(&bytes).unwrap();
+        assert_eq!(s1.to_bytes_le(), s2.to_le_bytes());
+
+        assert_eq!(format!("{:x}", s1), format!("{:x}", s2));
+        let ss1 = serde_json::to_string(&s1).unwrap();
+        let s2 = serde_json::from_str::<bls12_381_plus::Scalar>(&ss1).unwrap();
+        assert_eq!(s1.to_bytes_le(), s2.to_le_bytes());
+
+        let p1 = G1Projective::random(&mut rng);
+        let s1 = serde_json::to_string(&p1).unwrap();
+        let p2 = serde_json::from_str::<bls12_381_plus::G1Projective>(&s1).unwrap();
+        assert_eq!(
+            p1.to_affine().to_compressed(),
+            p2.to_affine().to_compressed()
+        );
+
+        let p1 = G2Projective::random(&mut rng);
+        let s2 = serde_json::to_string(&p1).unwrap();
+        let p2 = serde_json::from_str::<bls12_381_plus::G2Projective>(&s2).unwrap();
+        assert_eq!(
+            p1.to_affine().to_compressed(),
+            p2.to_affine().to_compressed()
         );
     }
 }

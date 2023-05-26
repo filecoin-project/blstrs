@@ -8,6 +8,7 @@ use core::{
 };
 
 use blst::*;
+use ff::Field;
 use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
@@ -15,7 +16,7 @@ use group::{
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, CtOption};
 
-use crate::{fp2::Fp2, Bls12, Engine, G1Affine, Gt, PairingCurveAffine, Scalar};
+use crate::{fp2::Fp2, util, Bls12, Engine, G1Affine, Gt, PairingCurveAffine, Scalar};
 
 /// This is an element of $\mathbb{G}_2$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -45,6 +46,26 @@ impl fmt::Display for G2Affine {
         } else {
             write!(f, "G2Affine(x={}, y={})", self.x(), self.y())
         }
+    }
+}
+
+impl fmt::LowerHex for G2Affine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_compressed();
+        for &b in bytes.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::UpperHex for G2Affine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_compressed();
+        for &b in bytes.iter() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
     }
 }
 
@@ -313,6 +334,11 @@ impl ConditionallySelectable for G2Projective {
 }
 
 impl G2Affine {
+    /// Bytes to represent this point compressed
+    pub const COMPRESSED_BYTES: usize = COMPRESSED_SIZE;
+    /// Bytes to represent this point uncompressed
+    pub const UNCOMPRESSED_BYTES: usize = UNCOMPRESSED_SIZE;
+
     /// Serializes this element into compressed form.
     pub fn to_compressed(&self) -> [u8; COMPRESSED_SIZE] {
         let mut out = [0u8; COMPRESSED_SIZE];
@@ -341,6 +367,14 @@ impl G2Affine {
             .and_then(|p| CtOption::new(p, p.is_on_curve() & p.is_torsion_free()))
     }
 
+    /// Attempts to deserialize a uncompressed element hex string. See [`notes::serialization`](crate::notes::serialization)
+    /// for details about how group elements are serialized.
+    pub fn from_uncompressed_hex(hex: &str) -> CtOption<Self> {
+        let mut bytes = [0u8; UNCOMPRESSED_SIZE];
+        util::decode_hex_into_slice(&mut bytes, hex.as_bytes());
+        G2Affine::from_uncompressed(&bytes)
+    }
+
     /// Attempts to deserialize an uncompressed element, not checking if the
     /// element is on the curve and not checking if it is in the correct subgroup.
     ///
@@ -357,6 +391,14 @@ impl G2Affine {
     pub fn from_compressed(bytes: &[u8; COMPRESSED_SIZE]) -> CtOption<Self> {
         G2Affine::from_compressed_unchecked(bytes)
             .and_then(|p| CtOption::new(p, p.is_on_curve() & p.is_torsion_free()))
+    }
+
+    /// Attempts to deserialize a compressed element hex string. See [`notes::serialization`](crate::notes::serialization)
+    /// for details about how group elements are serialized.
+    pub fn from_compressed_hex(hex: &str) -> CtOption<Self> {
+        let mut bytes = [0u8; COMPRESSED_SIZE];
+        util::decode_hex_into_slice(&mut bytes, hex.as_bytes());
+        G2Affine::from_compressed(&bytes)
     }
 
     /// Attempts to deserialize an uncompressed element, not checking if the
@@ -402,10 +444,12 @@ impl G2Affine {
         Fp2(self.0.y)
     }
 
+    #[deprecated(since = "0.7.0", note = "Use UNCOMPRESSED_BYTES instead")]
     pub const fn uncompressed_size() -> usize {
         UNCOMPRESSED_SIZE
     }
 
+    #[deprecated(since = "0.7.0", note = "Use COMPRESSED_BYTES instead")]
     pub const fn compressed_size() -> usize {
         COMPRESSED_SIZE
     }
@@ -472,6 +516,77 @@ impl PartialEq for G2Projective {
 }
 
 impl G2Projective {
+    /// Bytes to represent this point compressed
+    pub const COMPRESSED_BYTES: usize = COMPRESSED_SIZE;
+    /// Bytes to represent this point uncompressed
+    pub const UNCOMPRESSED_BYTES: usize = UNCOMPRESSED_SIZE;
+
+    /// The identity of the group: the point at infinity.
+    pub const IDENTITY: Self = Self(blst_p2 {
+        x: blst_fp2 {
+            fp: [blst_fp { l: [0u64; 6] }, blst_fp { l: [0u64; 6] }],
+        },
+        y: blst_fp2 {
+            fp: [blst_fp { l: [0u64; 6] }, blst_fp { l: [0u64; 6] }],
+        },
+        z: blst_fp2 {
+            fp: [blst_fp { l: [0u64; 6] }, blst_fp { l: [0u64; 6] }],
+        },
+    });
+    /// The fixed generator of the group. See [`notes::design`](notes/design/index.html#fixed-generators)
+    /// for how this generator is chosen.
+    pub const GENERATOR: Self = Self(blst_p2 {
+        x: blst_fp2 {
+            fp: [
+                blst_fp {
+                    l: [
+                        0xf5f2_8fa2_0294_0a10,
+                        0xb3f5_fb26_87b4_961a,
+                        0xa1a8_93b5_3e2a_e580,
+                        0x9894_999d_1a3c_aee9,
+                        0x6f67_b763_1863_366b,
+                        0x0581_9192_4350_bcd7,
+                    ],
+                },
+                blst_fp {
+                    l: [
+                        0xa5a9_c075_9e23_f606,
+                        0xaaa0_c59d_bccd_60c3,
+                        0x3bb1_7e18_e286_7806,
+                        0x1b1a_b6cc_8541_b367,
+                        0xc2b6_ed0e_f215_8547,
+                        0x1192_2a09_7360_edf3,
+                    ],
+                },
+            ],
+        },
+        y: blst_fp2 {
+            fp: [
+                blst_fp {
+                    l: [
+                        0x4c73_0af8_6049_4c4a,
+                        0x597c_fa1f_5e36_9c5a,
+                        0xe7e6_856c_aa0a_635a,
+                        0xbbef_b5e9_6e0d_495f,
+                        0x07d3_a975_f0ef_25a2,
+                        0x0083_fd8e_7e80_dae5,
+                    ],
+                },
+                blst_fp {
+                    l: [
+                        0xadc0_fc92_df64_b05d,
+                        0x18aa_270a_2b14_61dc,
+                        0x86ad_ac6a_3be4_eba0,
+                        0x7949_5c4e_c93d_a33a,
+                        0xe717_5850_a43c_caed,
+                        0x0b2b_c2a1_63de_1bf2,
+                    ],
+                },
+            ],
+        },
+        z: Fp2::ONE.0,
+    });
+
     /// Serializes this element into compressed form.
     pub fn to_compressed(&self) -> [u8; COMPRESSED_SIZE] {
         let mut out = [0u8; COMPRESSED_SIZE];
@@ -612,6 +727,18 @@ impl G2Projective {
         let res = points.mult(scalar_bytes.as_slice(), 255);
 
         G2Projective(res)
+    }
+}
+
+impl fmt::LowerHex for G2Projective {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:x}", self.to_affine())
+    }
+}
+
+impl fmt::UpperHex for G2Projective {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:X}", self.to_affine())
     }
 }
 
@@ -840,14 +967,14 @@ mod tests {
 
         // Negation edge case with zero.
         {
-            let mut z = G2Projective::identity();
+            let mut z = G2Projective::IDENTITY;
             z = z.neg();
             assert_eq!(z.is_identity().unwrap_u8(), 1);
         }
 
         // Doubling edge case with zero.
         {
-            let mut z = G2Projective::identity();
+            let mut z = G2Projective::IDENTITY;
             z = z.double();
             assert_eq!(z.is_identity().unwrap_u8(), 1);
         }
@@ -856,13 +983,13 @@ mod tests {
         {
             let mut r = G2Projective::random(&mut rng);
             let rcopy = r;
-            r += &G2Projective::identity();
+            r += &G2Projective::IDENTITY;
             assert_eq!(r, rcopy);
             r += &G2Affine::identity();
             assert_eq!(r, rcopy);
 
-            let mut z = G2Projective::identity();
-            z += &G2Projective::identity();
+            let mut z = G2Projective::IDENTITY;
+            z += &G2Projective::IDENTITY;
             assert_eq!(z.is_identity().unwrap_u8(), 1);
             z += &G2Affine::identity();
             assert_eq!(z.is_identity().unwrap_u8(), 1);
@@ -1288,8 +1415,8 @@ mod tests {
 
     #[test]
     fn test_projective_point_equality() {
-        let a = G2Projective::generator();
-        let b = G2Projective::identity();
+        let a = G2Projective::GENERATOR;
+        let b = G2Projective::IDENTITY;
 
         assert_eq!(a, a);
         assert_eq!(b, b);
@@ -1305,8 +1432,8 @@ mod tests {
 
     #[test]
     fn test_g2_is_identity() {
-        assert_eq!(G2Projective::identity().is_identity().unwrap_u8(), 1);
-        assert_eq!(G2Projective::generator().is_identity().unwrap_u8(), 0);
+        assert_eq!(G2Projective::IDENTITY.is_identity().unwrap_u8(), 1);
+        assert_eq!(G2Projective::GENERATOR.is_identity().unwrap_u8(), 0);
         assert_eq!(G2Affine::identity().is_identity().unwrap_u8(), 1);
         assert_eq!(G2Affine::generator().is_identity().unwrap_u8(), 0);
     }
@@ -1366,5 +1493,32 @@ mod tests {
         let pippenger = G2Projective::multi_exp(points.as_slice(), scalars.as_slice());
 
         assert_eq!(naive, pippenger);
+    }
+
+    #[test]
+    fn test_hex() {
+        let g1 = G2Projective::GENERATOR;
+        let hex = format!("{:x}", g1);
+        let g2 = G2Affine::from_compressed_hex(&hex).map(G2Projective::from);
+        assert_eq!(g2.is_some().unwrap_u8(), 1u8);
+        assert_eq!(g1, g2.unwrap());
+        let hex = hex::encode(g1.to_affine().to_uncompressed().as_ref());
+        let g2 = G2Affine::from_uncompressed_hex(&hex).map(G2Projective::from);
+        assert_eq!(g2.is_some().unwrap_u8(), 1u8);
+        assert_eq!(g1, g2.unwrap());
+    }
+
+    #[test]
+    fn test_identity() {
+        let id = G2Projective::IDENTITY;
+        let id2 = G2Projective::identity();
+        assert_eq!(id, id2);
+    }
+
+    #[test]
+    fn test_generator() {
+        let gen1 = G2Projective::GENERATOR;
+        let gen2 = G2Projective::generator();
+        assert_eq!(gen1, gen2);
     }
 }

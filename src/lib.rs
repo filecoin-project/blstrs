@@ -22,6 +22,7 @@ mod gt;
 mod pairing;
 mod scalar;
 mod traits;
+mod util;
 
 pub use g1::{G1Affine, G1Compressed, G1Projective, G1Uncompressed};
 pub use g2::{G2Affine, G2Compressed, G2Prepared, G2Projective, G2Uncompressed};
@@ -43,6 +44,10 @@ pub use crate::{fp::Fp, fp12::Fp12, fp2::Fp2};
 use ff::Field;
 use group::prime::PrimeCurveAffine;
 use pairing_lib::{Engine, MultiMillerLoop, PairingCurveAffine};
+
+pub use ff;
+pub use group;
+pub use pairing_lib;
 
 /// Bls12-381 engine
 #[derive(Debug, Copy, Clone)]

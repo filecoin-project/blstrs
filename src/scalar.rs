@@ -5,11 +5,12 @@ use core::{
     borrow::Borrow,
     cmp,
     convert::TryInto,
-    fmt,
+    fmt::{self, LowerHex, UpperHex},
     iter::{Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use crate::util;
 use blst::*;
 use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
@@ -99,6 +100,16 @@ const R2: Scalar = Scalar(blst_fr {
         0x2b6c_edcb_8792_5c23,
         0x05d3_1496_7254_398f,
         0x0748_d9d9_9f59_ff11,
+    ],
+});
+
+/// R^3 = 2^768 mod q
+const R3: Scalar = Scalar(blst_fr {
+    l: [
+        0xc62c_1807_439b_73af,
+        0x1b3e_0d18_8cf0_6990,
+        0x73d1_3c71_c7b5_f418,
+        0x6e2a_5bb9_c8db_33e9,
     ],
 });
 
@@ -379,15 +390,14 @@ impl Field for Scalar {
     fn invert(&self) -> CtOption<Self> {
         let mut inv = blst_fr::default();
         unsafe { blst_fr_eucl_inverse(&mut inv, &self.0) };
-        let is_invertible = !self.ct_eq(&Scalar::ZERO);
-        CtOption::new(Scalar(inv), is_invertible)
+        CtOption::new(Scalar(inv), !self.is_zero())
     }
 
     fn sqrt(&self) -> CtOption<Self> {
         // (t - 1) // 2 = 6104339283789297388802252303364915521546564123189034618274734669823
         ff::helpers::sqrt_tonelli_shanks(
             self,
-            &[
+            [
                 0x7fff_2dff_7fff_ffff,
                 0x04d0_ec02_a9de_d201,
                 0x94ce_bea4_199c_ec04,
@@ -431,9 +441,36 @@ impl PrimeField for Scalar {
     // Little-endian non-Montgomery form bigint mod p.
     type Repr = [u8; 32];
 
+    /// Converts a little-endian non-Montgomery form `repr` into a Montgomery form `Scalar`.
+    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
+        Self::from_bytes_le(&repr)
+    }
+    fn from_repr_vartime(repr: Self::Repr) -> Option<Self> {
+        let bytes_u64 = u64s_from_bytes(&repr);
+
+        if !is_valid(&bytes_u64) {
+            return None;
+        }
+        let mut out = blst_fr::default();
+        unsafe { blst_fr_from_uint64(&mut out, bytes_u64.as_ptr()) };
+        Some(Scalar(out))
+    }
+    /// Converts a Montgomery form `Scalar` into little-endian non-Montgomery from.
+    fn to_repr(&self) -> Self::Repr {
+        self.to_bytes_le()
+    }
+
+    fn is_odd(&self) -> Choice {
+        Choice::from(self.to_repr()[0] & 1)
+    }
+
+    /// Constant representing the modulus
+    const MODULUS: &'static str =
+        "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
+
     const NUM_BITS: u32 = 255;
+
     const CAPACITY: u32 = Self::NUM_BITS - 1;
-    const S: u32 = S;
 
     /// 2^-1
     const TWO_INV: Scalar = Scalar(blst_fr {
@@ -444,6 +481,12 @@ impl PrimeField for Scalar {
             0x0c12_58ac_d662_82b7,
         ],
     });
+
+    const MULTIPLICATIVE_GENERATOR: Self = GENERATOR;
+
+    const S: u32 = S;
+
+    const ROOT_OF_UNITY: Self = ROOT_OF_UNITY;
 
     /// ROOT_OF_UNITY^-1
     const ROOT_OF_UNITY_INV: Scalar = Scalar(blst_fr {
@@ -465,39 +508,6 @@ impl PrimeField for Scalar {
             0x6185_d066_27c0_67cb,
         ],
     });
-
-    /// Constant representing the modulus
-    const MODULUS: &'static str =
-        "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
-
-    /// Converts a little-endian non-Montgomery form `repr` into a Montgomery form `Scalar`.
-    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
-        Self::from_bytes_le(&repr)
-    }
-
-    fn from_repr_vartime(repr: Self::Repr) -> Option<Self> {
-        let bytes_u64 = u64s_from_bytes(&repr);
-
-        if !is_valid(&bytes_u64) {
-            return None;
-        }
-        let mut out = blst_fr::default();
-        unsafe { blst_fr_from_uint64(&mut out, bytes_u64.as_ptr()) };
-        Some(Scalar(out))
-    }
-
-    /// Converts a Montgomery form `Scalar` into little-endian non-Montgomery from.
-    fn to_repr(&self) -> Self::Repr {
-        self.to_bytes_le()
-    }
-
-    fn is_odd(&self) -> Choice {
-        Choice::from(self.to_repr()[0] & 1)
-    }
-
-    const MULTIPLICATIVE_GENERATOR: Self = GENERATOR;
-
-    const ROOT_OF_UNITY: Self = ROOT_OF_UNITY;
 }
 
 #[cfg(not(target_pointer_width = "64"))]
@@ -545,10 +555,37 @@ impl PrimeFieldBits for Scalar {
     }
 }
 
+impl LowerHex for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tmp = self.to_bytes_be();
+        for &b in tmp.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl UpperHex for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tmp = self.to_bytes_be();
+        for &b in tmp.iter() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
+    }
+}
+
 impl Scalar {
+    /// Bytes to represent this field
+    pub const BYTES: usize = 32;
+    /// The additive identity
+    pub const ZERO: Self = Self(blst_fr { l: [0, 0, 0, 0] });
+    /// The multiplicative identity
+    pub const ONE: Self = R;
+
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
-    pub fn from_bytes_le(bytes: &[u8; 32]) -> CtOption<Scalar> {
+    pub fn from_bytes_le(bytes: &[u8; Self::BYTES]) -> CtOption<Scalar> {
         let is_some =
             Choice::from(unsafe { blst_scalar_fr_check(&blst_scalar { b: *bytes }) as u8 });
 
@@ -562,7 +599,7 @@ impl Scalar {
 
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
-    pub fn from_bytes_be(be_bytes: &[u8; 32]) -> CtOption<Scalar> {
+    pub fn from_bytes_be(be_bytes: &[u8; Self::BYTES]) -> CtOption<Scalar> {
         let mut le_bytes = *be_bytes;
         le_bytes.reverse();
         Self::from_bytes_le(&le_bytes)
@@ -571,7 +608,7 @@ impl Scalar {
     /// Converts an element of `Scalar` into a byte representation in
     /// little-endian byte order.
     #[inline]
-    pub fn to_bytes_le(&self) -> [u8; 32] {
+    pub fn to_bytes_le(&self) -> [u8; Self::BYTES] {
         let mut out = [0u64; 4];
         unsafe { blst_uint64_from_fr(out.as_mut_ptr(), &self.0) };
         out.as_byte_slice().try_into().unwrap()
@@ -579,7 +616,7 @@ impl Scalar {
 
     /// Converts an element of `Scalar` into a byte representation in
     /// big-endian byte order.
-    pub fn to_bytes_be(&self) -> [u8; 32] {
+    pub fn to_bytes_be(&self) -> [u8; Self::BYTES] {
         let mut bytes = self.to_bytes_le();
         bytes.reverse();
         bytes
@@ -595,6 +632,20 @@ impl Scalar {
         unsafe { blst_fr_from_scalar(&mut out, &raw) };
 
         CtOption::new(Scalar(out), is_some)
+    }
+
+    /// Create a new [`Scalar`] from the provided big endian hex string.
+    pub fn from_hex_be(hex: &str) -> CtOption<Self> {
+        let mut buf = [0u8; Self::BYTES];
+        util::decode_hex_into_slice(&mut buf, hex.as_bytes());
+        Self::from_bytes_be(&buf)
+    }
+
+    /// Create a new [`Scalar`] from the provided little endian hex string.
+    pub fn from_hex_le(hex: &str) -> CtOption<Self> {
+        let mut buf = [0u8; Self::BYTES];
+        util::decode_hex_into_slice(&mut buf, hex.as_bytes());
+        Self::from_bytes_le(&buf)
     }
 
     #[allow(clippy::match_like_matches_macro)]
@@ -671,6 +722,74 @@ impl Scalar {
     #[inline]
     pub fn square_assign(&mut self) {
         unsafe { blst_fr_sqr(&mut self.0, &self.0) };
+    }
+
+    /// Converts a 512-bit little endian integer into
+    /// a `Scalar` by reducing by the modulus.
+    pub fn from_bytes_wide(bytes: &[u8; 64]) -> Scalar {
+        Self::from_u512([
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[16..24]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[32..40]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[40..48]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[48..56]).unwrap()),
+            u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[56..64]).unwrap()),
+        ])
+    }
+
+    /// Read from output of a KDF
+    pub fn from_okm(bytes: &[u8; 48]) -> Scalar {
+        const F_2_192: Scalar = Scalar(blst_fr {
+            l: [
+                0x5947_6ebc_41b4_528fu64,
+                0xc5a3_0cb2_43fc_c152u64,
+                0x2b34_e639_40cc_bd72u64,
+                0x1e17_9025_ca24_7088u64,
+            ],
+        });
+        let d0 = Scalar(blst_fr {
+            l: [
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[16..24]).unwrap()),
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap()),
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                0,
+            ],
+        });
+        let d1 = Scalar(blst_fr {
+            l: [
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[40..48]).unwrap()),
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[32..40]).unwrap()),
+                u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap()),
+                0,
+            ],
+        });
+        (d0 * R2) * F_2_192 + d1 * R2
+    }
+
+    fn from_u512(limbs: [u64; 8]) -> Scalar {
+        // We reduce an arbitrary 512-bit number by decomposing it into two 256-bit digits
+        // with the higher bits multiplied by 2^256. Thus, we perform two reductions
+        //
+        // 1. the lower bits are multiplied by R^2, as normal
+        // 2. the upper bits are multiplied by R^2 * 2^256 = R^3
+        //
+        // and computing their sum in the field. It remains to see that arbitrary 256-bit
+        // numbers can be placed into Montgomery form safely using the reduction. The
+        // reduction works so long as the product is less than R=2^256 multiplied by
+        // the modulus. This holds because for any `c` smaller than the modulus, we have
+        // that (2^256 - 1)*c is an acceptable product for the reduction. Therefore, the
+        // reduction always works so long as `c` is in the field; in this case it is either the
+        // constant `R2` or `R3`.
+        let d0 = Scalar(blst_fr {
+            l: [limbs[0], limbs[1], limbs[2], limbs[3]],
+        });
+        let d1 = Scalar(blst_fr {
+            l: [limbs[4], limbs[5], limbs[6], limbs[7]],
+        });
+        // Convert to Montgomery form
+        d0 * R2 + d1 * R3
     }
 }
 
@@ -1554,6 +1673,24 @@ mod tests {
     }
 
     #[test]
+    fn test_scalar_inversion() {
+        assert!(bool::from(Scalar::ZERO.invert().is_none()));
+        assert_eq!(Scalar::ONE.invert().unwrap(), Scalar::ONE);
+        assert_eq!((-&Scalar::ONE).invert().unwrap(), -&Scalar::ONE);
+
+        let mut tmp = R2;
+
+        for _ in 0..100 {
+            let mut tmp2 = tmp.invert().unwrap();
+            tmp2.mul_assign(&tmp);
+
+            assert_eq!(tmp2, Scalar::ONE);
+
+            tmp.add_assign(&R2);
+        }
+    }
+
+    #[test]
     fn test_scalar_double() {
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
@@ -1887,5 +2024,103 @@ mod tests {
             }
         }
         assert_eq!(0, yep_bad.len());
+    }
+
+    #[test]
+    fn test_hex() {
+        let s1 = R2;
+        let hex = format!("{:x}", s1);
+        let s2 = Scalar::from_hex_be(&hex);
+        assert_eq!(s2.is_some().unwrap_u8(), 1u8);
+        let s2 = s2.unwrap();
+        assert_eq!(s1, s2);
+        let hex = hex::encode(s1.to_bytes_le());
+        let s2 = Scalar::from_hex_le(&hex);
+        assert_eq!(s2.is_some().unwrap_u8(), 1u8);
+        let s2 = s2.unwrap();
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn test_from_okm() {
+        let okm = [
+            155, 244, 205, 103, 163, 209, 47, 21, 160, 157, 37, 214, 5, 190, 2, 104, 223, 213, 41,
+            196, 96, 200, 48, 201, 176, 145, 160, 209, 98, 168, 107, 154, 167, 197, 41, 218, 168,
+            132, 185, 95, 111, 233, 85, 102, 45, 243, 24, 145,
+        ];
+        let expected = [
+            184, 141, 14, 25, 196, 12, 5, 65, 222, 229, 103, 132, 86, 28, 224, 249, 100, 61, 100,
+            238, 234, 250, 153, 140, 126, 148, 80, 19, 66, 92, 178, 14,
+        ];
+        let actual = Scalar::from_okm(&okm).to_bytes_le();
+        assert_eq!(actual, expected)
+    }
+
+    #[test]
+    fn test_from_u512_zero() {
+        assert_eq!(
+            Scalar::ZERO,
+            Scalar::from_u512([MODULUS[0], MODULUS[1], MODULUS[2], MODULUS[3], 0, 0, 0, 0])
+        );
+    }
+
+    #[test]
+    fn test_from_u512_r() {
+        assert_eq!(R, Scalar::from_u512([1, 0, 0, 0, 0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn test_from_u512_r2() {
+        assert_eq!(R2, Scalar::from_u512([0, 0, 0, 0, 1, 0, 0, 0]));
+    }
+
+    #[test]
+    fn test_from_u512_max() {
+        let max_u64 = 0xffff_ffff_ffff_ffff;
+        assert_eq!(
+            R3 - R,
+            Scalar::from_u512([
+                max_u64, max_u64, max_u64, max_u64, max_u64, max_u64, max_u64, max_u64
+            ])
+        );
+    }
+
+    #[test]
+    fn test_from_bytes_wide_r2() {
+        assert_eq!(
+            R2,
+            Scalar::from_bytes_wide(&[
+                254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236,
+                239, 79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ])
+        );
+    }
+
+    #[test]
+    fn test_from_bytes_wide_negative_one() {
+        assert_eq!(
+            -&Scalar::ONE,
+            Scalar::from_bytes_wide(&[
+                0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
+                8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ])
+        );
+    }
+
+    #[test]
+    fn test_from_bytes_wide_maximum() {
+        assert_eq!(
+            Scalar(blst_fr {
+                l: [
+                    0xc62c_1805_439b_73b1,
+                    0xc2b9_551e_8ced_218e,
+                    0xda44_ec81_daf9_a422,
+                    0x5605_aa60_1c16_2e79,
+                ]
+            }),
+            Scalar::from_bytes_wide(&[0xff; 64])
+        );
     }
 }
