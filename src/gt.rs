@@ -398,9 +398,9 @@ impl Gt {
         let mut c0 = self.0.c0();
 
         c0.0.fp2[0] = (c0.c0() + Fp2::from(1)).0;
-        let b = c0 * self.0.c1().invert().unwrap();
+        let b = Option::<Fp6>::from(c0 * self.0.c1().invert());
 
-        Some(GtCompressed(b))
+        b.map(GtCompressed)
     }
 
     fn is_in_subgroup(&self) -> bool {
