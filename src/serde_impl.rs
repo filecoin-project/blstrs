@@ -1,14 +1,17 @@
 use core::convert::TryFrom;
 use core::fmt;
 use core::marker::PhantomData;
+use std::fmt::Formatter;
 
-use group::{prime::PrimeCurveAffine, Curve};
+use group::{prime::PrimeCurveAffine, Curve, GroupEncoding};
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
     ser::SerializeTuple,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
+use crate::gt::GtRepr;
+use crate::util::decode_hex_into_slice;
 use crate::{
     fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, util, G1Affine, G1Projective, G2Affine, G2Projective,
     Gt, MillerLoopResult, Scalar,
@@ -194,16 +197,62 @@ impl Serialize for MillerLoopResult {
     }
 }
 
-impl<'de> Deserialize<'de> for Gt {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let fp12 = Fp12::deserialize(d)?;
-        Ok(Gt(fp12))
+impl Serialize for Gt {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if s.is_human_readable() {
+            format!("{:x}", self).serialize(s)
+        } else {
+            let repr = self.to_bytes();
+            let mut tupler = s.serialize_tuple(repr.0.len())?;
+            for byte in repr.as_ref() {
+                tupler.serialize_element(byte)?;
+            }
+            tupler.end()
+        }
     }
 }
 
-impl Serialize for Gt {
-    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(s)
+impl<'de> Deserialize<'de> for Gt {
+    fn deserialize<D>(d: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if d.is_human_readable() {
+            let repr = <String>::deserialize(d)?;
+            let mut bytes = [0u8; 288];
+            decode_hex_into_slice(&mut bytes, repr.as_bytes());
+            Option::<Gt>::from(Gt::from_bytes(&GtRepr(bytes)))
+                .ok_or_else(|| serde::de::Error::custom("invalid compressed value"))
+        } else {
+            struct ArrayVisitor;
+
+            impl<'de> Visitor<'de> for ArrayVisitor {
+                type Value = Gt;
+
+                fn expecting(&self, f: &mut Formatter) -> fmt::Result {
+                    write!(f, "an array of 288 bytes")
+                }
+
+                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: SeqAccess<'de>,
+                {
+                    let mut repr = GtRepr::default();
+                    for i in repr.as_mut() {
+                        *i = seq
+                            .next_element()?
+                            .ok_or_else(|| serde::de::Error::custom("invalid compressed value"))?;
+                    }
+                    Option::<Gt>::from(Gt::from_bytes(&repr))
+                        .ok_or_else(|| serde::de::Error::custom("invalid compressed value"))
+                }
+            }
+
+            d.deserialize_tuple(288, ArrayVisitor)
+        }
     }
 }
 
@@ -294,6 +343,7 @@ mod tests {
 
     use core::fmt::Debug;
 
+    use crate::pairing;
     use ff::Field;
     use group::{Curve, Group};
     use rand_core::SeedableRng;
@@ -504,5 +554,19 @@ mod tests {
             p1.to_affine().to_compressed(),
             p2.to_affine().to_compressed()
         );
+    }
+
+    #[test]
+    fn serde_gt() {
+        let gt = pairing(&G1Affine::generator(), &G2Affine::generator());
+        let json = serde_json::to_string(&gt).unwrap();
+        let gt2 = serde_json::from_str(&json);
+        assert!(gt2.is_ok());
+        assert_eq!(gt, gt2.unwrap());
+
+        let bare = serde_bare::to_vec(&gt).unwrap();
+        let gt2 = serde_bare::from_slice(&bare);
+        assert!(gt2.is_ok());
+        assert_eq!(gt, gt2.unwrap());
     }
 }

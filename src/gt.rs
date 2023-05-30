@@ -1,15 +1,15 @@
 use core::{
     borrow::Borrow,
-    fmt,
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use std::fmt::{self, Formatter, LowerHex, UpperHex};
 
 use blst::*;
 use ff::Field;
-use group::Group;
+use group::{Group, GroupEncoding};
 use rand_core::RngCore;
-use subtle::{Choice, ConstantTimeEq};
+use subtle::{Choice, ConstantTimeEq, CtOption};
 
 use crate::{fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, traits::Compress, Scalar};
 
@@ -179,7 +179,6 @@ impl Group for Gt {
     }
 
     fn generator() -> Self {
-        // pairing(&G1Affine::generator(), &G2Affine::generator())
         Gt(Fp12::new(
             Fp6::new(
                 Fp2::new(
@@ -306,12 +305,86 @@ impl Group for Gt {
     }
 }
 
+impl GroupEncoding for Gt {
+    type Repr = GtRepr;
+
+    fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
+        let cursor = std::io::Cursor::new(&bytes.0);
+        if let Ok(gt) = Self::read_compressed(cursor) {
+            CtOption::new(gt, Choice::from(1))
+        } else {
+            CtOption::new(Gt::identity(), Choice::from(0))
+        }
+    }
+
+    fn from_bytes_unchecked(bytes: &Self::Repr) -> CtOption<Self> {
+        Self::from_bytes(bytes)
+    }
+
+    fn to_bytes(&self) -> Self::Repr {
+        struct ArrayWrapper<'a> {
+            arr: &'a mut [u8; 288],
+            index: usize,
+        }
+        impl<'a> std::io::Write for ArrayWrapper<'a> {
+            fn write(&mut self, src: &[u8]) -> std::io::Result<usize> {
+                if self.index + src.len() > self.arr.len() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "array is too small",
+                    ));
+                }
+                self.arr[self.index..self.index + src.len()].copy_from_slice(src);
+                self.index += src.len();
+                Ok(src.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        impl<'a> ArrayWrapper<'a> {
+            pub fn new(arr: &'a mut [u8; 288]) -> Self {
+                Self { arr, index: 0 }
+            }
+        }
+
+        let mut repr = GtRepr::default();
+        let mut buf = ArrayWrapper::new(&mut repr.0);
+        self.write_compressed(&mut buf).unwrap();
+        repr
+    }
+}
+
+impl LowerHex for Gt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_bytes();
+        for &byte in bytes.as_ref() {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl UpperHex for Gt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_bytes();
+        for &byte in bytes.as_ref() {
+            write!(f, "{:02X}", byte)?;
+        }
+        Ok(())
+    }
+}
+
 /// Compressed representation of `Fp12`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 #[repr(transparent)]
 pub struct GtCompressed(pub(crate) Fp6);
 
 impl Gt {
+    /// The number of bytes needed to represent this element.
+    pub const BYTES: usize = 288;
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<GtCompressed> {
         // Use torus-based compression from Section 4.1 in
@@ -391,6 +464,27 @@ impl Compress for Gt {
         compressed.uncompress().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid compression point")
         })
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct GtRepr(pub(crate) [u8; 288]);
+
+impl Default for GtRepr {
+    fn default() -> Self {
+        GtRepr([0; 288])
+    }
+}
+
+impl AsRef<[u8]> for GtRepr {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsMut<[u8]> for GtRepr {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.0
     }
 }
 
