@@ -5,6 +5,7 @@ use core::{
 };
 use std::fmt::{self, Formatter, LowerHex, UpperHex};
 
+use arrayref::array_ref;
 use blst::*;
 use ff::Field;
 use group::{Group, GroupEncoding};
@@ -309,12 +310,94 @@ impl GroupEncoding for Gt {
     type Repr = GtRepr;
 
     fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
-        let cursor = std::io::Cursor::new(&bytes.0);
-        if let Ok(gt) = Self::read_compressed(cursor) {
-            CtOption::new(gt, Choice::from(1))
-        } else {
-            CtOption::new(Gt::identity(), Choice::from(0))
-        }
+        let c000 = Fp::from_bytes_be(array_ref![bytes.0, 0, 48]);
+        let c001 = Fp::from_bytes_be(array_ref![bytes.0, 48, 48]);
+        let c010 = Fp::from_bytes_be(array_ref![bytes.0, 96, 48]);
+        let c011 = Fp::from_bytes_be(array_ref![bytes.0, 144, 48]);
+        let c020 = Fp::from_bytes_be(array_ref![bytes.0, 192, 48]);
+        let c021 = Fp::from_bytes_be(array_ref![bytes.0, 240, 48]);
+        let c100 = Fp::from_bytes_be(array_ref![bytes.0, 288, 48]);
+        let c101 = Fp::from_bytes_be(array_ref![bytes.0, 336, 48]);
+        let c110 = Fp::from_bytes_be(array_ref![bytes.0, 384, 48]);
+        let c111 = Fp::from_bytes_be(array_ref![bytes.0, 432, 48]);
+        let c120 = Fp::from_bytes_be(array_ref![bytes.0, 480, 48]);
+        let c121 = Fp::from_bytes_be(array_ref![bytes.0, 528, 48]);
+
+        c000.and_then(|cc000| {
+            c001.and_then(|cc001| {
+                c010.and_then(|cc010| {
+                    c011.and_then(|cc011| {
+                        c020.and_then(|cc020| {
+                            c021.and_then(|cc021| {
+                                c100.and_then(|cc100| {
+                                    c101.and_then(|cc101| {
+                                        c110.and_then(|cc110| {
+                                            c111.and_then(|cc111| {
+                                                c120.and_then(|cc120| {
+                                                    c121.and_then(|cc121| {
+                                                        CtOption::new(
+                                                            Gt(Fp12(blst_fp12 {
+                                                                fp6: [
+                                                                    blst_fp6 {
+                                                                        fp2: [
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc000.0,
+                                                                                    cc001.0,
+                                                                                ],
+                                                                            },
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc010.0,
+                                                                                    cc011.0,
+                                                                                ],
+                                                                            },
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc020.0,
+                                                                                    cc021.0,
+                                                                                ],
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                    blst_fp6 {
+                                                                        fp2: [
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc100.0,
+                                                                                    cc101.0,
+                                                                                ],
+                                                                            },
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc110.0,
+                                                                                    cc111.0,
+                                                                                ],
+                                                                            },
+                                                                            blst_fp2 {
+                                                                                fp: [
+                                                                                    cc120.0,
+                                                                                    cc121.0,
+                                                                                ],
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                ],
+                                                            })),
+                                                            Choice::from(1u8),
+                                                        )
+                                                    })
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
+                            })
+                        })
+                    })
+                })
+            })
+        })
     }
 
     fn from_bytes_unchecked(bytes: &Self::Repr) -> CtOption<Self> {
@@ -322,38 +405,20 @@ impl GroupEncoding for Gt {
     }
 
     fn to_bytes(&self) -> Self::Repr {
-        struct ArrayWrapper<'a> {
-            arr: &'a mut [u8; 288],
-            index: usize,
-        }
-        impl<'a> std::io::Write for ArrayWrapper<'a> {
-            fn write(&mut self, src: &[u8]) -> std::io::Result<usize> {
-                if self.index + src.len() > self.arr.len() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "array is too small",
-                    ));
-                }
-                self.arr[self.index..self.index + src.len()].copy_from_slice(src);
-                self.index += src.len();
-                Ok(src.len())
-            }
-
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-
-        impl<'a> ArrayWrapper<'a> {
-            pub fn new(arr: &'a mut [u8; 288]) -> Self {
-                Self { arr, index: 0 }
-            }
-        }
-
-        let mut repr = GtRepr::default();
-        let mut buf = ArrayWrapper::new(&mut repr.0);
-        self.write_compressed(&mut buf).unwrap();
-        repr
+        let mut output = [0u8; Self::BYTES];
+        output[..48].copy_from_slice(&self.0.c0().c0().c0().to_bytes_be());
+        output[48..96].copy_from_slice(&self.0.c0().c0().c1().to_bytes_be());
+        output[96..144].copy_from_slice(&self.0.c0().c1().c0().to_bytes_be());
+        output[144..192].copy_from_slice(&self.0.c0().c1().c1().to_bytes_be());
+        output[192..240].copy_from_slice(&self.0.c0().c2().c0().to_bytes_be());
+        output[240..288].copy_from_slice(&self.0.c0().c2().c1().to_bytes_be());
+        output[288..336].copy_from_slice(&self.0.c1().c0().c0().to_bytes_be());
+        output[336..384].copy_from_slice(&self.0.c1().c0().c1().to_bytes_be());
+        output[384..432].copy_from_slice(&self.0.c1().c1().c0().to_bytes_be());
+        output[432..480].copy_from_slice(&self.0.c1().c1().c1().to_bytes_be());
+        output[480..528].copy_from_slice(&self.0.c1().c2().c0().to_bytes_be());
+        output[528..Self::BYTES].copy_from_slice(&self.0.c1().c2().c1().to_bytes_be());
+        GtRepr(output)
     }
 }
 
@@ -390,7 +455,7 @@ pub struct GtCompressed(pub(crate) Fp6);
 
 impl Gt {
     /// The number of bytes needed to represent this element.
-    pub const BYTES: usize = 288;
+    pub const BYTES: usize = 576;
     /// Compress this point. Returns `None` if the element is not in the cyclomtomic subgroup.
     pub fn compress(&self) -> Option<GtCompressed> {
         // Use torus-based compression from Section 4.1 in
@@ -474,11 +539,11 @@ impl Compress for Gt {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct GtRepr(pub(crate) [u8; 288]);
+pub struct GtRepr(pub(crate) [u8; 576]);
 
 impl Default for GtRepr {
     fn default() -> Self {
-        GtRepr([0; 288])
+        GtRepr([0; 576])
     }
 }
 
@@ -686,5 +751,18 @@ mod tests {
         let q = G2Projective::random(&mut rng).to_affine();
         let a = crate::pairing(&p, &q);
         assert!(a.is_in_subgroup());
+    }
+
+    #[test]
+    fn compatibility() {
+        let gt1 = pairing(&G1Affine::generator(), &G2Affine::generator());
+        let gt2 = bls12_381_plus::pairing(
+            &bls12_381_plus::G1Affine::generator(),
+            &bls12_381_plus::G2Affine::generator(),
+        );
+        assert_eq!(
+            gt1.to_bytes().as_ref(),
+            GroupEncoding::to_bytes(&gt2).as_ref()
+        );
     }
 }

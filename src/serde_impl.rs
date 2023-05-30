@@ -222,7 +222,7 @@ impl<'de> Deserialize<'de> for Gt {
     {
         if d.is_human_readable() {
             let repr = <String>::deserialize(d)?;
-            let mut bytes = [0u8; 288];
+            let mut bytes = [0u8; Gt::BYTES];
             decode_hex_into_slice(&mut bytes, repr.as_bytes());
             Option::<Gt>::from(Gt::from_bytes(&GtRepr(bytes)))
                 .ok_or_else(|| serde::de::Error::custom("invalid compressed value"))
@@ -233,7 +233,7 @@ impl<'de> Deserialize<'de> for Gt {
                 type Value = Gt;
 
                 fn expecting(&self, f: &mut Formatter) -> fmt::Result {
-                    write!(f, "an array of 288 bytes")
+                    write!(f, "an array of {} bytes", Gt::BYTES)
                 }
 
                 fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -251,7 +251,7 @@ impl<'de> Deserialize<'de> for Gt {
                 }
             }
 
-            d.deserialize_tuple(288, ArrayVisitor)
+            d.deserialize_tuple(Gt::BYTES, ArrayVisitor)
         }
     }
 }
