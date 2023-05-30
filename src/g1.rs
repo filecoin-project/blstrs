@@ -509,6 +509,12 @@ impl fmt::Display for G1Projective {
     }
 }
 
+impl Default for G1Projective {
+    fn default() -> G1Projective {
+        G1Projective::identity()
+    }
+}
+
 impl AsRef<blst_p1> for G1Projective {
     fn as_ref(&self) -> &blst_p1 {
         &self.0

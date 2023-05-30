@@ -377,6 +377,12 @@ impl UpperHex for Gt {
     }
 }
 
+impl subtle::ConditionallySelectable for Gt {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Gt(Fp12::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
 /// Compressed representation of `Fp12`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 #[repr(transparent)]

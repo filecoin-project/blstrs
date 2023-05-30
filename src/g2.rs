@@ -476,6 +476,12 @@ impl fmt::Display for G2Projective {
     }
 }
 
+impl Default for G2Projective {
+    fn default() -> Self {
+        G2Projective::identity()
+    }
+}
+
 impl AsRef<blst_p2> for G2Projective {
     fn as_ref(&self) -> &blst_p2 {
         &self.0
