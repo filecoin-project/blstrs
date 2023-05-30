@@ -398,7 +398,7 @@ impl Gt {
         let mut c0 = self.0.c0();
 
         c0.0.fp2[0] = (c0.c0() + Fp2::from(1)).0;
-        let b = Option::<Fp6>::from(c0 * self.0.c1().invert());
+        let b = Option::<Fp6>::from(self.0.c1().invert()).map(|x| x * c0);
 
         b.map(GtCompressed)
     }
