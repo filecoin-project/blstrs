@@ -15,7 +15,7 @@ rust-version = "1.56.1"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-blst = { version = "=0.3.10", default-features = true }
+blst = { version = "0.3.10", default-features = true }
 rand_core = "0.6"
 ff = "0.13"
 group = { version = "0.13", features = ["tests"] }
