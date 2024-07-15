@@ -10,6 +10,7 @@ env:
   RUSTFLAGS: "-Dwarnings"
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
   set-msrv:
@@ -17,44 +18,49 @@ jobs:
     outputs:
       msrv: ${{ steps.msrv.outputs.msrv }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: msrv
         run: echo "::set-output name=msrv::$(echo $MSRV)"
 
-  # NOTE vmx 2022-06-14: currently doesn't work, hence run it on CircleCI
-  # for now.
-  #linux_foreign:
-  #  strategy:
-  #    matrix:
-  #      include:
-  #        # 64-bit Linux/arm64
-  #        - target: aarch64-unknown-linux-gnu
-  #          rust: nightly
-  #          arch: aarch64
-  #
-  #  runs-on: ubuntu-18.04
-  #  steps:
-  #    - uses: actions/checkout@v2
-  #    - uses: uraimo/run-on-arch-action@v2.1.1
-  #      name: Run commands
-  #      id: runcmd
-  #      with:
-  #        arch: aarch64
-  #        distro: ubuntu18.04
-  #
-  #        # Not required, but speeds up builds by storing container images in
-  #        # a GitHub package registry.
-  #        githubToken: ${{ github.token }}
-  #
-  #        install: |
-  #          apt-get update -q -y
-  #          apt-get install -q -y ocl-icd-opencl-dev curl build-essential
-  #          curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain ${{ matrix.rust }} -y
-  #          source $HOME/.cargo/env
-  #
-  #        run: |
-  #          $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }}
-  #          $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }}
+  linux_foreign:
+    strategy:
+      matrix:
+        include:
+          # 64-bit Linux/arm64
+          - target: aarch64-unknown-linux-gnu
+            # NOTE vmx 2024-07-15: Use at least Rust 1.68.2 for now, so that we can use the sparse
+            # index. Without this, the build times out. Once the MSRV is >= 1.68.2, we don't need
+            # to special case anymore and can use the MSRV instead.
+            toolchain: 1.68.2
+            arch: aarch64
+
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: uraimo/run-on-arch-action@v2
+        name: Run tests
+        id: runtests
+        with:
+          arch: aarch64
+          distro: ubuntu22.04
+
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+
+          env: | # YAML, but pipe character is necessary
+            CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y ocl-icd-opencl-dev curl build-essential
+            curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain ${{ matrix.toolchain }} -y
+            source $HOME/.cargo/env
+
+          run: |
+            $HOME/.cargo/bin/rustup override set ${{ matrix.toolchain }}
+            $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }}
+            $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }}
 
   # Linux tests
   linux:
@@ -64,32 +70,30 @@ jobs:
         include:
           # 32-bit Linux/x86
           - target: i686-unknown-linux-gnu
-            rust: ${{needs.set-msrv.outputs.msrv}}
+            toolchain: ${{needs.set-msrv.outputs.msrv}}
             deps: sudo apt update && sudo apt install gcc-multilib
           - target: i686-unknown-linux-gnu
-            rust: stable
+            toolchain: stable
             deps: sudo apt update && sudo apt install gcc-multilib
 
           # 64-bit Linux/x86_64
           - target: x86_64-unknown-linux-gnu
-            rust: ${{needs.set-msrv.outputs.msrv}}
+            toolchain: ${{needs.set-msrv.outputs.msrv}}
           - target: x86_64-unknown-linux-gnu
-            rust: stable
+            toolchain: stable
 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
-          override: true
       - name: Install opencl
         run: sudo apt-get install -y ocl-icd-opencl-dev
       - run: ${{ matrix.deps }}
-      - run: cargo test --target ${{ matrix.target }}
-      - run: cargo test --target ${{ matrix.target }} --features portable
+      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }}
+      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }} --features portable
 
   # macOS tests
   macos:
@@ -102,15 +106,13 @@ jobs:
 
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
           target: x86_64-apple-darwin
-          override: true
-      - run: cargo test
-      - run: cargo test --features portable
+      - run: cargo +${{ matrix.toolchain }} test
+      - run: cargo +${{ matrix.toolchain }} test --features portable
 
  # Windows tests
   windows:
@@ -124,46 +126,54 @@ jobs:
 
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
-          override: true
       - uses: msys2/setup-msys2@v2
-      - run: cargo test --target ${{ matrix.target }}
-      - run: cargo test --target ${{ matrix.target }} --features portable
+      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }}
+      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }} --features portable
 
   clippy_check:
+    needs: set-msrv
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features          
+            toolchain: ${{ needs.set-msrv.outputs.msrv }}
+            components: clippy
+      - name: Clippy
+        run: cargo clippy --all-features
 
   check_fmt_and_docs:
+    needs: set-msrv
     name: Checking fmt and docs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+      - uses: actions/checkout@v4
 
-    - uses: actions-rs/toolchain@v1
-      with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt
+      - uses: dtolnay/rust-toolchain@master
+        with:
+            toolchain: ${{ needs.set-msrv.outputs.msrv }}
+            components: rustfmt
 
-    - name: setup
-      run: |
-        rustup component add rustfmt
-        rustc --version
-    - name: fmt
-      run: cargo fmt --all -- --check
+      - name: setup
+        run: |
+          rustup component add rustfmt
+          rustc --version
+      - name: fmt
+        run: cargo fmt --all -- --check
 
-    - name: Docs
-      run: cargo doc
+      - name: Docs
+        run: cargo doc
+
+  # Benchmarks need a nightly Rust
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Run cargo bench
+        run: cargo +nightly bench
