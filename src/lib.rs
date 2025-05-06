@@ -25,7 +25,7 @@ mod traits;
 
 pub use g1::{G1Affine, G1Compressed, G1Projective, G1Uncompressed};
 pub use g2::{G2Affine, G2Compressed, G2Prepared, G2Projective, G2Uncompressed};
-pub use gt::Gt;
+pub use gt::{Gt, GtCompressed};
 pub use pairing::*;
 pub use scalar::Scalar;
 pub use traits::Compress;
