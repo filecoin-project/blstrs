@@ -8,7 +8,6 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use ff::Field;
-use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::{Fp, FROBENIUS_COEFF_FP2_C1};
@@ -249,10 +248,6 @@ impl Fp2 {
 }
 
 impl Field for Fp2 {
-    fn random(mut rng: impl RngCore) -> Self {
-        Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
-    }
-
     const ZERO: Self = Fp2(blst_fp2 {
         fp: [Fp::ZERO.0, Fp::ZERO.0],
     });
@@ -293,6 +288,10 @@ impl Field for Fp2 {
     fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
         // ff::helpers::sqrt_ratio_generic(num, div)
         unimplemented!()
+    }
+
+    fn try_from_rng<R: rand_core::TryRngCore + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Ok(Fp2::new(Fp::try_from_rng(rng)?, Fp::try_from_rng(rng)?))
     }
 }
 

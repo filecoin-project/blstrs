@@ -8,7 +8,6 @@ use core::{
 use blst::*;
 use ff::Field;
 use group::Group;
-use rand_core::RngCore;
 use subtle::{Choice, ConstantTimeEq};
 
 use crate::{fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, traits::Compress, Scalar};
@@ -158,21 +157,7 @@ where
 
 impl Group for Gt {
     type Scalar = Scalar;
-
-    fn random(mut rng: impl RngCore) -> Self {
-        loop {
-            let mut out = Fp12::random(&mut rng);
-
-            // Not all elements of Fp12 are elements of the prime-order multiplicative
-            // subgroup. We run the random element through final_exponentiation to obtain
-            // a valid element, which requires that it is non-zero.
-            if !bool::from(out.is_zero()) {
-                unsafe { blst_final_exp(&mut out.0, &out.0) };
-                return Gt(out);
-            }
-        }
-    }
-
+    
     /// Returns the group identity, which is $1$.
     fn identity() -> Self {
         Gt(Fp12::ONE)
@@ -302,6 +287,20 @@ impl Group for Gt {
 
     fn double(&self) -> Self {
         Gt(self.0.square())
+    }
+
+    fn try_from_rng<R: rand_core::TryRngCore + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        loop {
+            let mut out = Fp12::try_from_rng(rng)?;
+
+            // Not all elements of Fp12 are elements of the prime-order multiplicative
+            // subgroup. We run the random element through final_exponentiation to obtain
+            // a valid element, which requires that it is non-zero.
+            if !bool::from(out.is_zero()) {
+                unsafe { blst_final_exp(&mut out.0, &out.0) };
+                return Ok(Gt(out));
+            }
+        }
     }
 }
 

@@ -13,7 +13,6 @@ use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
-use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, CtOption};
 
 use crate::{fp::Fp, Bls12, Engine, G2Affine, Gt, PairingCurveAffine, Scalar};
@@ -651,27 +650,6 @@ impl G1Projective {
 impl Group for G1Projective {
     type Scalar = Scalar;
 
-    fn random(mut rng: impl RngCore) -> Self {
-        let mut out = blst_p1::default();
-        let mut msg = [0u8; 64];
-        rng.fill_bytes(&mut msg);
-        const DST: [u8; 16] = [0; 16];
-        const AUG: [u8; 16] = [0; 16];
-
-        unsafe {
-            blst_encode_to_g1(
-                &mut out,
-                msg.as_ptr(),
-                msg.len(),
-                DST.as_ptr(),
-                DST.len(),
-                AUG.as_ptr(),
-                AUG.len(),
-            )
-        };
-
-        G1Projective(out)
-    }
 
     fn identity() -> Self {
         G1Projective(blst_p1::default())
@@ -689,6 +667,28 @@ impl Group for G1Projective {
         let mut double = blst_p1::default();
         unsafe { blst_p1_double(&mut double, &self.0) };
         G1Projective(double)
+    }
+
+    fn try_from_rng<R: rand_core::TryRngCore + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        let mut out = blst_p1::default();
+        let mut msg = [0u8; 64];
+        rng.try_fill_bytes(&mut msg)?;
+        const DST: [u8; 16] = [0; 16];
+        const AUG: [u8; 16] = [0; 16];
+
+        unsafe {
+            blst_encode_to_g1(
+                &mut out,
+                msg.as_ptr(),
+                msg.len(),
+                DST.as_ptr(),
+                DST.len(),
+                AUG.as_ptr(),
+                AUG.len(),
+            )
+        };
+
+        Ok(G1Projective(out))
     }
 }
 

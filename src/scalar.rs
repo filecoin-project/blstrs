@@ -13,7 +13,6 @@ use core::{
 use blst::*;
 use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
-use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -340,22 +339,6 @@ impl_mul_assign!(Scalar);
 const REPR_SHAVE_BITS: usize = 256 - Scalar::NUM_BITS as usize;
 
 impl Field for Scalar {
-    fn random(mut rng: impl RngCore) -> Self {
-        loop {
-            let mut raw = [0u64; 4];
-            for int in raw.iter_mut() {
-                *int = rng.next_u64();
-            }
-
-            // Mask away the unused most-significant bits.
-            raw[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
-
-            if let Some(scalar) = Scalar::from_u64s_le(&raw).into() {
-                return scalar;
-            }
-        }
-    }
-
     const ZERO: Self = ZERO;
 
     const ONE: Self = R;
@@ -398,6 +381,22 @@ impl Field for Scalar {
 
     fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
         ff::helpers::sqrt_ratio_generic(num, div)
+    }
+
+    fn try_from_rng<R: rand_core::TryRngCore + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        loop {
+            let mut raw = [0u64; 4];
+            for int in raw.iter_mut() {
+                *int = rng.try_next_u64()?;
+            }
+
+            // Mask away the unused most-significant bits.
+            raw[3] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
+
+            if let Some(scalar) = Scalar::from_u64s_le(&raw).into() {
+                return Ok(scalar);
+            }
+        }
     }
 }
 
