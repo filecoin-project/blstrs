@@ -9,12 +9,14 @@ use core::{
     iter::{Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use std::{ptr, sync::atomic};
 
 use blst::*;
 use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+use zeroize::Zeroize;
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
 /// curve construction.
@@ -671,6 +673,20 @@ impl Scalar {
     #[inline]
     pub fn square_assign(&mut self) {
         unsafe { blst_fr_sqr(&mut self.0, &self.0) };
+    }
+}
+
+impl Zeroize for Scalar {
+    /// Implementation based on the zeroize crate, which guarantees the value
+    /// becomes 0 when the function is called by ensuring the compiler does not
+    /// optimize the function away
+    /// See <https://docs.rs/zeroize/latest/zeroize/#what-guarantees-does-this-crate-provide>
+    /// for more details
+    fn zeroize(&mut self) {
+        unsafe {
+            ptr::write_volatile(&mut self.0, blst_fr { l: [0u64; 4] });
+        }
+        atomic::compiler_fence(atomic::Ordering::SeqCst);
     }
 }
 
