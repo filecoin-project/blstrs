@@ -9,7 +9,6 @@ use core::{
     iter::{Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use std::{ptr, sync::atomic};
 
 use blst::*;
 use byte_slice_cast::AsByteSlice;
@@ -677,16 +676,8 @@ impl Scalar {
 }
 
 impl Zeroize for Scalar {
-    /// Implementation based on the zeroize crate, which guarantees the value
-    /// becomes 0 when the function is called by ensuring the compiler does not
-    /// optimize the function away
-    /// See <https://docs.rs/zeroize/latest/zeroize/#what-guarantees-does-this-crate-provide>
-    /// for more details
     fn zeroize(&mut self) {
-        unsafe {
-            ptr::write_volatile(&mut self.0, blst_fr { l: [0u64; 4] });
-        }
-        atomic::compiler_fence(atomic::Ordering::SeqCst);
+        self.0.l.zeroize();
     }
 }
 
