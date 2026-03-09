@@ -15,6 +15,7 @@ use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+use zeroize::Zeroize;
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
 /// curve construction.
@@ -671,6 +672,12 @@ impl Scalar {
     #[inline]
     pub fn square_assign(&mut self) {
         unsafe { blst_fr_sqr(&mut self.0, &self.0) };
+    }
+}
+
+impl Zeroize for Scalar {
+    fn zeroize(&mut self) {
+        self.0.l.zeroize();
     }
 }
 
