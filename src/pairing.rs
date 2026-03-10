@@ -5,15 +5,17 @@ use subtle::{Choice, ConditionallySelectable};
 
 use blst::*;
 
-/// Execute a complete pairing operation `(p, q)`.
-pub fn pairing(p: &G1Affine, q: &G2Affine) -> Gt {
+/// Execute a Miller loop operation `(p, q)`, which is the first part of the
+/// full [`pairing`] operation.
+pub fn miller_loop(p: &G1Affine, q: &G2Affine) -> MillerLoopResult {
     let mut tmp = blst_fp12::default();
     unsafe { blst_miller_loop(&mut tmp, &q.0, &p.0) };
+    MillerLoopResult(Fp12(tmp))
+}
 
-    let mut out = blst_fp12::default();
-    unsafe { blst_final_exp(&mut out, &tmp) };
-
-    Gt(Fp12(out))
+/// Execute a complete pairing operation `(p, q)`.
+pub fn pairing(p: &G1Affine, q: &G2Affine) -> Gt {
+    miller_loop(p, q).final_exponentiation()
 }
 
 macro_rules! impl_pairing {
@@ -146,11 +148,35 @@ pub fn unique_messages(msgs: &[&[u8]]) -> bool {
 }
 
 /// Represents results of a Miller loop, one of the most expensive portions
-/// of the pairing function. `MillerLoopResult`s cannot be compared with each
-/// other until `.final_exponentiation()` is called, which is also expensive.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// of the pairing function.
+///
+/// `MillerLoopResult`s can't be compared together numerically for equality. However, two
+/// `MillerLoopResult`s can be compared with [`MillerLoopResult::final_verify`], which is
+/// faster than performing [`MillerLoopResult::final_exponentiation`] on both and then comparing
+/// the results.
+#[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 pub struct MillerLoopResult(pub(crate) Fp12);
+
+impl MillerLoopResult {
+    /// Perform the final exponentiation to convert the Miller loop result
+    /// into a full pairing result.
+    pub fn final_exponentiation(&self) -> Gt {
+        let mut out = blst_fp12::default();
+        unsafe { blst_final_exp(&mut out, &self.0.0) };
+        Gt(Fp12(out))
+    }
+    
+    pub fn final_verify(&self, other: &MillerLoopResult) -> bool {
+        unsafe { blst::blst_fp12_finalverify(&self.0.0, &other.0.0) }
+    }
+}
+
+impl PartialEq for MillerLoopResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.final_verify(other)
+    }
+}
 
 impl ConditionallySelectable for MillerLoopResult {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
