@@ -144,6 +144,8 @@ jobs:
         with:
             toolchain: ${{ needs.set-msrv.outputs.msrv }}
             components: clippy
+      - name: setup
+        run: rustup component add clippy
       - name: Clippy
         run: cargo clippy --all-features
 
