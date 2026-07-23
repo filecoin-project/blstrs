@@ -59,8 +59,8 @@ jobs:
 
           run: |
             $HOME/.cargo/bin/rustup override set ${{ matrix.toolchain }}
-            $HOME/.cargo/bin/cargo test --release --target ${{ matrix.target }}
-            $HOME/.cargo/bin/cargo test --release --features portable --target ${{ matrix.target }}
+            $HOME/.cargo/bin/cargo test --release --locked --target ${{ matrix.target }}
+            $HOME/.cargo/bin/cargo test --release --locked --features portable --target ${{ matrix.target }}
 
   # Linux tests
   linux:
@@ -92,8 +92,8 @@ jobs:
       - name: Install opencl
         run: sudo apt-get install -y ocl-icd-opencl-dev
       - run: ${{ matrix.deps }}
-      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }}
-      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }} --features portable
+      - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }}
+      - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }} --features portable
 
   # macOS tests
   macos:
@@ -111,8 +111,8 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           target: x86_64-apple-darwin
-      - run: cargo +${{ matrix.toolchain }} test
-      - run: cargo +${{ matrix.toolchain }} test --features portable
+      - run: cargo +${{ matrix.toolchain }} test --locked
+      - run: cargo +${{ matrix.toolchain }} test --locked --features portable
 
  # Windows tests
   windows:
@@ -132,8 +132,8 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
       - uses: msys2/setup-msys2@v2
-      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }}
-      - run: cargo +${{ matrix.toolchain }} test --target ${{ matrix.target }} --features portable
+      - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }}
+      - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }} --features portable
 
   clippy_check:
     needs: set-msrv
@@ -147,7 +147,7 @@ jobs:
       - name: setup
         run: rustup component add clippy
       - name: Clippy
-        run: cargo clippy --all-features
+        run: cargo clippy --all-features --locked
 
   check_fmt_and_docs:
     needs: set-msrv
@@ -169,7 +169,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Docs
-        run: cargo doc
+        run: cargo doc --locked
 
   # Benchmarks need a nightly Rust
   bench:
@@ -178,4 +178,4 @@ jobs:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
       - name: Run cargo bench
-        run: cargo +nightly bench
+        run: cargo +nightly bench --locked
