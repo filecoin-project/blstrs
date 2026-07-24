@@ -6,7 +6,7 @@ on:
     branches: master
 
 env:
-  MSRV: 1.63
+  MSRV: 1.85
   RUSTFLAGS: "-Dwarnings"
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
@@ -23,15 +23,13 @@ jobs:
         run: echo "::set-output name=msrv::$(echo $MSRV)"
 
   linux_foreign:
+    needs: set-msrv
     strategy:
       matrix:
         include:
           # 64-bit Linux/arm64
           - target: aarch64-unknown-linux-gnu
-            # NOTE vmx 2024-07-15: Use at least Rust 1.68.2 for now, so that we can use the sparse
-            # index. Without this, the build times out. Once the MSRV is >= 1.68.2, we don't need
-            # to special case anymore and can use the MSRV instead.
-            toolchain: 1.68.2
+            toolchain: ${{needs.set-msrv.outputs.msrv}}
             arch: aarch64
 
     runs-on: ubuntu-22.04
