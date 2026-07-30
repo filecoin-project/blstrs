@@ -569,6 +569,23 @@ impl Scalar {
         Self::from_bytes_le(&le_bytes)
     }
 
+    /// Interprets `bytes` as a big-endian integer of any length and reduces it modulo the
+    /// group order.
+    pub fn from_be_bytes_mod_order(bytes: &[u8]) -> Self {
+        // necessary because `blst_scalar_from_be_bytes` below does not work for this value
+        if bytes.is_empty() {
+            return Self::ZERO;
+        }
+
+        let mut raw = blst_scalar::default();
+        unsafe { blst_scalar_from_be_bytes(&mut raw, bytes.as_ptr(), bytes.len()) };
+
+        let mut out = blst_fr::default();
+        unsafe { blst_fr_from_scalar(&mut out, &raw) };
+
+        Scalar(out)
+    }
+
     /// Converts an element of `Scalar` into a byte representation in
     /// little-endian byte order.
     #[inline]
@@ -1894,5 +1911,31 @@ mod tests {
             }
         }
         assert_eq!(0, yep_bad.len());
+    }
+
+    /// Vectors from `bls12_381`'s `map_scalar`. These pin the endianness; blst covers the
+    /// reduction itself.
+    #[test]
+    fn test_from_be_bytes_mod_order() {
+        let vectors: &[(&[u8], &str)] = &[
+            (
+                b"aaaaaabbbbbbccccccddddddeeeeeeffffffgggggghhhhhh",
+                "Scalar(0x2228450bf55d8fe62395161bd3677ff6fc28e45b89bc87e02a818eda11a8c5da)",
+            ),
+            (
+                b"111111222222333333444444555555666666777777888888",
+                "Scalar(0x4aa543cbd2f0c8f37f8a375ce2e383eb343e7e3405f61e438b0a15fb8899d1ae)",
+            ),
+        ];
+
+        for (okm, expected) in vectors {
+            assert_eq!(
+                &format!("{:?}", Scalar::from_be_bytes_mod_order(okm)),
+                expected
+            );
+        }
+
+        // The empty-input guard is ours: blst would underflow its digit count.
+        assert_eq!(Scalar::from_be_bytes_mod_order(&[]), Scalar::ZERO);
     }
 }
