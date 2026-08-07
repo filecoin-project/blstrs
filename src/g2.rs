@@ -4,6 +4,7 @@ use core::{
     borrow::Borrow,
     fmt,
     iter::Sum,
+    mem::MaybeUninit,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
@@ -752,8 +753,12 @@ impl From<G2Affine> for G2Prepared {
                 infinity: true,
             }
         } else {
-            let mut lines = vec![blst_fp6::default(); 68];
-            unsafe { blst_precompute_lines(lines.as_mut_ptr(), &affine.0) }
+            let mut lines = Vec::with_capacity(68);
+            let uninit_lines: &mut [MaybeUninit<blst_fp6>] = lines.spare_capacity_mut();
+            unsafe {
+                blst_precompute_lines(uninit_lines.as_mut_ptr().cast(), &affine.0);
+                lines.set_len(68);
+            }
             G2Prepared {
                 lines,
                 infinity: false,
