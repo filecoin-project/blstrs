@@ -41,7 +41,7 @@ mod tests;
 pub use crate::{fp::Fp, fp12::Fp12, fp2::Fp2};
 
 use ff::Field;
-use group::prime::PrimeCurveAffine;
+use group::CurveAffine;
 use pairing_lib::{Engine, MultiMillerLoop, PairingCurveAffine};
 
 /// Bls12-381 engine

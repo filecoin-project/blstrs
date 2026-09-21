@@ -8,7 +8,7 @@ use core::{
 };
 
 use ff::Field;
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::{fp::Fp, fp2::Fp2, fp6::Fp6};
@@ -211,8 +211,8 @@ impl_sum!(Fp12);
 impl_product!(Fp12);
 
 impl Field for Fp12 {
-    fn random(mut rng: impl RngCore) -> Self {
-        Fp12::new(Fp6::random(&mut rng), Fp6::random(&mut rng))
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Ok(Fp12::new(Fp6::try_random(rng)?, Fp6::try_random(rng)?))
     }
 
     const ZERO: Self = Fp12::new(Fp6::ZERO, Fp6::ZERO);

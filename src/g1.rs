@@ -10,10 +10,10 @@ use std::io::Read;
 
 use blst::*;
 use group::{
-    prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
-    Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
+    prime::{PrimeCurve, PrimeGroup},
+    Curve, CurveAffine, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, CtOption};
 
 use crate::{fp::Fp, Bls12, Engine, G2Affine, Gt, PairingCurveAffine, Scalar};
@@ -651,10 +651,10 @@ impl G1Projective {
 impl Group for G1Projective {
     type Scalar = Scalar;
 
-    fn random(mut rng: impl RngCore) -> Self {
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
         let mut out = blst_p1::default();
         let mut msg = [0u8; 64];
-        rng.fill_bytes(&mut msg);
+        rng.try_fill_bytes(&mut msg)?;
         const DST: [u8; 16] = [0; 16];
         const AUG: [u8; 16] = [0; 16];
 
@@ -670,7 +670,7 @@ impl Group for G1Projective {
             )
         };
 
-        G1Projective(out)
+        Ok(G1Projective(out))
     }
 
     fn identity() -> Self {
@@ -713,18 +713,16 @@ impl WnafGroup for G1Projective {
 impl PrimeGroup for G1Projective {}
 
 impl Curve for G1Projective {
-    type AffineRepr = G1Affine;
+    type Affine = G1Affine;
 
-    fn to_affine(&self) -> Self::AffineRepr {
+    fn to_affine(&self) -> Self::Affine {
         self.into()
     }
 }
 
-impl PrimeCurve for G1Projective {
-    type Affine = G1Affine;
-}
+impl PrimeCurve for G1Projective {}
 
-impl PrimeCurveAffine for G1Affine {
+impl CurveAffine for G1Affine {
     type Scalar = Scalar;
     type Curve = G1Projective;
 

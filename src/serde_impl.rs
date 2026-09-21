@@ -2,7 +2,7 @@ use core::convert::TryFrom;
 use core::fmt;
 use core::marker::PhantomData;
 
-use group::{prime::PrimeCurveAffine, Curve};
+use group::{prime::PrimeCurveAffine, Curve, CurveAffine};
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
     ser::SerializeTuple,

@@ -8,7 +8,7 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use ff::Field;
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::{Fp, FROBENIUS_COEFF_FP2_C1};
@@ -249,8 +249,8 @@ impl Fp2 {
 }
 
 impl Field for Fp2 {
-    fn random(mut rng: impl RngCore) -> Self {
-        Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Ok(Fp2::new(Fp::try_random(rng)?, Fp::try_random(rng)?))
     }
 
     const ZERO: Self = Fp2(blst_fp2 {
