@@ -6,9 +6,6 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::wrong_self_convention)]
 
-#[cfg(not(target_endian = "little"))]
-compile_error!("blstrs is only supported on little endian architectures");
-
 #[macro_use]
 mod macros;
 

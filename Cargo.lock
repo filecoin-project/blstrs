@@ -31,7 +31,6 @@ name = "blstrs"
 version = "0.7.1"
 dependencies = [
  "blst",
- "byte-slice-cast",
  "ec-gpu",
  "ff",
  "group",
@@ -44,12 +43,6 @@ dependencies = [
  "subtle",
  "zeroize",
 ]
-
-[[package]]
-name = "byte-slice-cast"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7575182f7272186991736b70173b0ea045398f984bf5ebbb3804736ce1330c9d"
 
 [[package]]
 name = "cc"

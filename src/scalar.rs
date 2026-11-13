@@ -11,7 +11,6 @@ use core::{
 };
 
 use blst::*;
-use byte_slice_cast::AsByteSlice;
 use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -592,9 +591,9 @@ impl Scalar {
     /// little-endian byte order.
     #[inline]
     pub fn to_bytes_le(&self) -> [u8; 32] {
-        let mut out = [0u64; 4];
-        unsafe { blst_uint64_from_fr(out.as_mut_ptr(), &self.0) };
-        out.as_byte_slice().try_into().unwrap()
+        let mut out = blst_scalar::default();
+        unsafe { blst_scalar_from_fr(&mut out, &self.0) };
+        out.b
     }
 
     /// Converts an element of `Scalar` into a byte representation in
