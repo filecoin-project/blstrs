@@ -13,7 +13,7 @@ use crate::{
 };
 
 use ff::Field;
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
@@ -253,12 +253,12 @@ impl_sum!(Fp6);
 impl_product!(Fp6);
 
 impl Field for Fp6 {
-    fn random(mut rng: impl RngCore) -> Self {
-        Fp6::new(
-            Fp2::random(&mut rng),
-            Fp2::random(&mut rng),
-            Fp2::random(&mut rng),
-        )
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Ok(Fp6::new(
+            Fp2::try_random(rng)?,
+            Fp2::try_random(rng)?,
+            Fp2::try_random(rng)?,
+        ))
     }
 
     const ZERO: Self = Fp6::new(Fp2::ZERO, Fp2::ZERO, Fp2::ZERO);

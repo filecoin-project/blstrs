@@ -8,7 +8,7 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use ff::Field;
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp2::Fp2;
@@ -505,18 +505,18 @@ const NUM_BITS: u32 = 381;
 const REPR_SHAVE_BITS: usize = 384 - NUM_BITS as usize;
 
 impl Field for Fp {
-    fn random(mut rng: impl RngCore) -> Self {
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
         loop {
             let mut raw = [0u64; 6];
             for int in raw.iter_mut() {
-                *int = rng.next_u64();
+                *int = rng.try_next_u64()?;
             }
 
             // Mask away the unused most-significant bits.
             raw[5] &= 0xffffffffffffffff >> REPR_SHAVE_BITS;
 
             if let Some(fp) = Fp::from_u64s_le(&raw).into() {
-                return fp;
+                return Ok(fp);
             }
         }
     }

@@ -4,7 +4,7 @@ pub mod field;
 #[cfg(feature = "gpu")]
 #[test]
 fn u64_to_u32_test() {
-    use rand_core::{RngCore, SeedableRng};
+    use rand_core::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     let seed = [0; 16];
