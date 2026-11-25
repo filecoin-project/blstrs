@@ -10,6 +10,7 @@ documentation = "https://docs.rs/blstrs"
 categories = ["cryptography", "algorithms"]
 readme = "README.md"
 rust-version = "1.85"
+resolver = "3"
 
 [package.metadata.docs.rs]
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
