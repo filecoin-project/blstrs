@@ -5,22 +5,30 @@ on:
   push:
     branches: master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 env:
-  MSRV: 1.85
   RUSTFLAGS: "-Dwarnings"
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
-  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
   set-msrv:
     runs-on: ubuntu-latest
     outputs:
       msrv: ${{ steps.msrv.outputs.msrv }}
+      pinned: ${{ steps.msrv.outputs.pinned }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: msrv
-        run: echo "::set-output name=msrv::$(echo $MSRV)"
+        run: |
+          echo "msrv=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].rust_version')" | tee --append "$GITHUB_OUTPUT"
+          echo "pinned=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" | tee --append "$GITHUB_OUTPUT"
 
   linux_foreign:
     needs: set-msrv
@@ -34,7 +42,7 @@ jobs:
 
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: uraimo/run-on-arch-action@v2
         name: Run tests
         id: runtests
@@ -45,9 +53,6 @@ jobs:
           # Not required, but speeds up builds by storing container images in
           # a GitHub package registry.
           githubToken: ${{ github.token }}
-
-          env: | # YAML, but pipe character is necessary
-            CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
           install: |
             apt-get update -q -y
@@ -71,18 +76,18 @@ jobs:
             toolchain: ${{needs.set-msrv.outputs.msrv}}
             deps: sudo apt update && sudo apt install gcc-multilib
           - target: i686-unknown-linux-gnu
-            toolchain: stable
+            toolchain: ${{needs.set-msrv.outputs.pinned}}
             deps: sudo apt update && sudo apt install gcc-multilib
 
           # 64-bit Linux/x86_64
           - target: x86_64-unknown-linux-gnu
             toolchain: ${{needs.set-msrv.outputs.msrv}}
           - target: x86_64-unknown-linux-gnu
-            toolchain: stable
+            toolchain: ${{needs.set-msrv.outputs.pinned}}
 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -100,11 +105,11 @@ jobs:
       matrix:
         toolchain:
           - ${{needs.set-msrv.outputs.msrv}}
-          - stable
+          - ${{needs.set-msrv.outputs.pinned}}
 
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -112,7 +117,7 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} test --locked
       - run: cargo +${{ matrix.toolchain }} test --locked --features portable
 
- # Windows tests
+  # Windows tests
   windows:
     needs: set-msrv
     strategy:
@@ -120,11 +125,11 @@ jobs:
         include:
           # 64-bit Windows (MSVC)
           - target: x86_64-pc-windows-msvc
-            toolchain: stable
+            toolchain: ${{needs.set-msrv.outputs.pinned}}
 
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -134,35 +139,18 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }} --features portable
 
   clippy_check:
-    needs: set-msrv
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-            toolchain: ${{ needs.set-msrv.outputs.msrv }}
-            components: clippy
-      - name: setup
-        run: rustup component add clippy
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Clippy
         run: cargo clippy --all-features --locked
 
   check_fmt_and_docs:
-    needs: set-msrv
     name: Checking fmt and docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: dtolnay/rust-toolchain@master
-        with:
-            toolchain: ${{ needs.set-msrv.outputs.msrv }}
-            components: rustfmt
-
-      - name: setup
-        run: |
-          rustup component add rustfmt
-          rustc --version
       - name: fmt
         run: cargo fmt --all -- --check
 
@@ -173,7 +161,7 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@nightly
       - name: Run cargo bench
         run: cargo +nightly bench --locked
