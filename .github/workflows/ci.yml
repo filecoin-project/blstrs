@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: uraimo/run-on-arch-action@v3
+      - uses: uraimo/run-on-arch-action@9893a0f995e5148dcc313ba661820f3992cffcc1 # v3.3
         name: Run tests
         id: runtests
         with:
@@ -134,7 +134,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
-      - uses: msys2/setup-msys2@v2
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
       - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }}
       - run: cargo +${{ matrix.toolchain }} test --locked --target ${{ matrix.target }} --features portable
 
